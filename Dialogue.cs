@@ -21,6 +21,8 @@ public class Dialogue
         public Sprite characterImage; // Character image
         public bool faceRight; // Orientation: true = face right, false = face left
         public List<DialogueChoice> choices; // List of choices for this line
+        public string animationTrigger; // Name of the parameter
+        public string animationParameterType = "trigger"; // "trigger" or "bool"
     }
 
     public List<DialogueLine> lines; // List of dialogue lines

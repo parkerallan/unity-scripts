@@ -27,6 +27,8 @@ public class DialogueManager : MonoBehaviour
     public RectTransform choiceMarker; // Reference to the marker (e.g., arrow)
     private Rigidbody playerRigidbody; // Reference to the player's Rigidbody
     private bool isDisplayingChoices = false; // Tracks whether choices are currently being displayed
+    public Animator playerAnimator;
+    public Animator npcAnimator;
 
     void Start()
     {
@@ -123,6 +125,28 @@ public class DialogueManager : MonoBehaviour
         // Display the sentence
         StopAllCoroutines();
         StartCoroutine(TypeSentence(line.sentence));
+
+        // Trigger animation if specified
+        if (!string.IsNullOrEmpty(line.animationTrigger))
+        {
+            Animator targetAnimator = null;
+            if (line.speaker == "Player" && playerAnimator != null)
+                targetAnimator = playerAnimator;
+            else if (npcAnimator != null)
+                targetAnimator = npcAnimator;
+
+            if (targetAnimator != null)
+            {
+                if (line.animationParameterType == "bool")
+                {
+                    targetAnimator.SetBool(line.animationTrigger, true);
+                }
+                else // default to trigger
+                {
+                    targetAnimator.SetTrigger(line.animationTrigger);
+                }
+            }
+        }
 
         // Check for choices
         if (line.choices != null && line.choices.Count > 0)
