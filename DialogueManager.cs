@@ -28,7 +28,8 @@ public class DialogueManager : MonoBehaviour
     private Rigidbody playerRigidbody; // Reference to the player's Rigidbody
     private bool isDisplayingChoices = false; // Tracks whether choices are currently being displayed
     public Animator playerAnimator;
-    public Animator npcAnimator;
+    private Animator currentNpcAnimator; // Reference to the current NPC's animator
+    private bool justStartedDialogue = false;
 
     void Start()
     {
@@ -48,6 +49,12 @@ public class DialogueManager : MonoBehaviour
                 return;
             }
 
+            if (justStartedDialogue)
+            {
+                justStartedDialogue = false;
+                return; // Skip input this frame
+            }
+
             if (Input.GetKeyDown(KeyCode.E))
             {
                 if (nextSentenceSound != null)
@@ -59,15 +66,14 @@ public class DialogueManager : MonoBehaviour
         }
     }
 
-    public void StartDialogue(Dialogue dialogue, Rigidbody playerRigidbody)
+    public void StartDialogue(Dialogue dialogue, Rigidbody playerRigidbody, Animator npcAnimator = null)
     {
-        lines = new List<Dialogue.DialogueLine>(dialogue.lines); // Copy the dialogue lines
-        currentLineIndex = 0; // Reset the current line index
+        lines = new List<Dialogue.DialogueLine>(dialogue.lines);
+        currentLineIndex = 0;
         selectedChoiceIndex = 0;
         isDialogueActive = true;
-
-        // Store the player's Rigidbody reference
         this.playerRigidbody = playerRigidbody;
+        this.currentNpcAnimator = npcAnimator; // Store the current NPC's animator
 
         // Lock the player's position
         if (playerRigidbody != null)
@@ -83,6 +89,7 @@ public class DialogueManager : MonoBehaviour
         }
 
         // Start the dialogue
+        justStartedDialogue = true;
         DisplayNextSentence();
     }
 
@@ -132,19 +139,15 @@ public class DialogueManager : MonoBehaviour
             Animator targetAnimator = null;
             if (line.speaker == "Player" && playerAnimator != null)
                 targetAnimator = playerAnimator;
-            else if (npcAnimator != null)
-                targetAnimator = npcAnimator;
+            else if (currentNpcAnimator != null)
+                targetAnimator = currentNpcAnimator;
 
             if (targetAnimator != null)
             {
                 if (line.animationParameterType == "bool")
-                {
                     targetAnimator.SetBool(line.animationTrigger, true);
-                }
-                else // default to trigger
-                {
+                else
                     targetAnimator.SetTrigger(line.animationTrigger);
-                }
             }
         }
 

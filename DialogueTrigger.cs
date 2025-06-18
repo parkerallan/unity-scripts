@@ -78,7 +78,8 @@ public class DialogueTrigger : MonoBehaviour
         FaceEachOther();
 
         dialogueManager.DialogCanvas.SetActive(true);
-        dialogueManager.StartDialogue(dialogue, playerRigidbody);
+        Animator npcAnimator = GetComponent<Animator>();
+        dialogueManager.StartDialogue(dialogue, playerRigidbody, npcAnimator);
         dialogueManager.OnDialogueEnd += HandleDialogueEnd;
     }
 
