@@ -6,6 +6,9 @@ public class UnderwaterOverlay : MonoBehaviour
     public GameObject overlayImage; // Assign your UI Image GameObject
     public Transform playerHead;    // Assign the player's camera or head transform
     public AudioMixer audioMixer;   // Assign your AudioMixer asset in the Inspector
+    
+    [Header("Offset Settings")]
+    public float headOffset = 0.2f; // Vertical offset for head position check (positive = higher threshold)
 
     private BoxCollider boxCollider;
     private bool isUnderwater = false;
@@ -22,7 +25,8 @@ public class UnderwaterOverlay : MonoBehaviour
         if (playerHead == null || overlayImage == null || boxCollider == null || audioMixer == null)
             return;
 
-        bool isHeadInside = boxCollider.bounds.Contains(playerHead.position);
+        // Check if the player's head is within the collider's bounds, considering the offset
+        bool isHeadInside = boxCollider.bounds.Contains(playerHead.position + Vector3.up * headOffset);
 
         if (isHeadInside != isUnderwater)
         {
