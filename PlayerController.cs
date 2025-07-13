@@ -42,10 +42,39 @@ public class PlayerController : MonoBehaviour {
         return gunScript != null && gunScript.isGunActive;
     }
 
+    // Helper method to check if the rifle is active
+    private bool IsRifleActive() {
+        RifleScript rifleScript = GetComponentInChildren<RifleScript>();
+        return rifleScript != null && rifleScript.isRifleActive;
+    }
+
+    // Helper method to check if any weapon is active
+    private bool IsAnyWeaponActive() {
+        return IsGunActive() || IsRifleActive();
+    }
+
     // Helper method to check if the gun has ammo
     private bool HasAmmo() {
         GunScript gunScript = GetComponentInChildren<GunScript>();
         return gunScript != null && gunScript.currentAmmo > 0;
+    }
+
+    // Helper method to check if the rifle has ammo
+    private bool HasRifleAmmo() {
+        RifleScript rifleScript = GetComponentInChildren<RifleScript>();
+        return rifleScript != null && rifleScript.currentAmmo > 0;
+    }
+
+    // Helper method to get the current fire mode for the active weapon
+    private FireMode GetActiveWeaponFireMode() {
+        if (IsGunActive()) {
+            GunScript gunScript = GetComponentInChildren<GunScript>();
+            return (gunScript._fireMode == GunNamespace.FireMode.Single) ? FireMode.Single : FireMode.Burst;
+        } else if (IsRifleActive()) {
+            // Rifle is automatic-only, so always return Burst (for animation purposes)
+            return FireMode.Burst;
+        }
+        return FireMode.Single;
     }
 
     void Update() {
@@ -54,6 +83,7 @@ public class PlayerController : MonoBehaviour {
             _moveInput = Vector3.zero;
             animator.SetBool("isWalking", false);
             animator.SetBool("isRunning", false);
+            animator.SetBool("isMovingWRifle", false);
             return;
         }
 
@@ -75,48 +105,95 @@ public class PlayerController : MonoBehaviour {
             animator.SetBool("isIdle", false);
         }
 
-        if (Input.GetKeyDown(KeyCode.F)) {
-            _fireMode = (_fireMode == FireMode.Single) ? FireMode.Burst : FireMode.Single;
-            //Debug.Log("Fire mode set to: " + _fireMode);
-        }
+        // Remove the old fire mode toggle - weapons handle their own fire modes now
+        // if (Input.GetKeyDown(KeyCode.F)) {
+        //     _fireMode = (_fireMode == FireMode.Single) ? FireMode.Burst : FireMode.Single;
+        //     //Debug.Log("Fire mode set to: " + _fireMode);
+        // }
 
         // Set combat mode if right mouse button is held down
         _combatMode = Input.GetMouseButton(1);
-        if (Input.GetKey(KeyCode.Mouse1) && IsGunActive()) {
-            animator.SetBool("isAiming", true);
+        if (Input.GetKey(KeyCode.Mouse1) && IsAnyWeaponActive()) {
+            // Set appropriate aiming animation based on active weapon
+            if (IsGunActive()) {
+                animator.SetBool("isAiming", true);
+                animator.SetBool("isAimingRifle", false);
+            } else if (IsRifleActive()) {
+                animator.SetBool("isAiming", false);
+                animator.SetBool("isAimingRifle", true);
+            }
 
             orientation = aimCamera;
 
             if (Input.GetKeyDown(KeyCode.Q)) {
-                animator.SetTrigger("isDivingL");
+                if (IsGunActive()) {
+                    animator.SetTrigger("isDivingL");
+                } else if (IsRifleActive()) {
+                    animator.SetTrigger("isDivingRifleL");
+                }
             } else if (Input.GetKeyDown(KeyCode.E)) {
-                animator.SetTrigger("isDivingR");
+                if (IsGunActive()) {
+                    animator.SetTrigger("isDivingR");
+                } else if (IsRifleActive()) {
+                    animator.SetTrigger("isDivingRifleR");
+                }
             } else {
                 animator.SetBool("isStanding", true);
             }
 
-            // Check if the gun is active and has ammo before playing firing animations
-            if (IsGunActive() && HasAmmo()) {
-                // Depending on the selected fire mode...
-                if (_fireMode == FireMode.Single) {
+            // Check if any weapon is active and has ammo before playing firing animations
+            bool hasAmmoForActiveWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
+            
+            if (IsAnyWeaponActive()) {
+                FireMode currentFireMode = GetActiveWeaponFireMode();
+                
+                // Depending on the selected fire mode and weapon type...
+                if (currentFireMode == FireMode.Single) {
                     // Single shot: fire only on the first frame when mouse button is pressed
-                    if (Input.GetKeyDown(KeyCode.Mouse0)) {
-                        animator.SetBool("isFiring", true);
+                    if (Input.GetKeyDown(KeyCode.Mouse0) && hasAmmoForActiveWeapon) {
+                        if (IsGunActive()) {
+                            animator.SetBool("isFiring", true);
+                            animator.SetBool("isFiringRifle", false);
+                            Debug.Log("Gun single fire animation triggered");
+                        } else if (IsRifleActive()) {
+                            animator.SetBool("isFiring", false);
+                            animator.SetBool("isFiringRifle", true);
+                            Debug.Log("Rifle single fire animation triggered");
+                        }
                     }
                     if (Input.GetKeyUp(KeyCode.Mouse0)) {
                         animator.SetBool("isFiring", false);
+                        animator.SetBool("isFiringRifle", false);
                     }
-                } else if (_fireMode == FireMode.Burst) {
-                    // Burst mode: fire continuously while mouse button is held down
-                    if (Input.GetKeyDown(KeyCode.Mouse0)) {
-                        animator.SetBool("isFiringAuto", true);
+                    // Don't stop single fire animations due to ammo running out - let them complete
+                } else { // Burst mode for gun or Automatic mode for rifle
+                    // Burst/Auto mode: fire continuously while mouse button is held down
+                    if (Input.GetKeyDown(KeyCode.Mouse0) && hasAmmoForActiveWeapon) {
+                        if (IsGunActive()) {
+                            animator.SetBool("isFiringAuto", true);
+                            animator.SetBool("isFiringRifle", false);
+                            Debug.Log("Gun burst fire animation triggered");
+                        } else if (IsRifleActive()) {
+                            animator.SetBool("isFiringAuto", false);
+                            animator.SetBool("isFiringRifle", true);
+                            Debug.Log("Rifle auto fire animation triggered (using isFiringRifle)");
+                        }
                     }
-                    if (Input.GetKeyUp(KeyCode.Mouse0)) {
+                    if (Input.GetKeyUp(KeyCode.Mouse0) || !hasAmmoForActiveWeapon) {
                         animator.SetBool("isFiringAuto", false);
+                        animator.SetBool("isFiringRifle", false);
                     }
                 }
-            } else if (!HasAmmo()) {
-                Debug.Log("Out of ammo! Press R to reload.");
+                
+                // Only show out of ammo message when trying to fire with no ammo
+                if (!hasAmmoForActiveWeapon && Input.GetKeyDown(KeyCode.Mouse0)) {
+                    Debug.Log("Out of ammo! Press R to reload.");
+                }
+            } else {
+                // Stop all firing animations when no weapon is active
+                animator.SetBool("isFiring", false);
+                animator.SetBool("isFiringRifle", false);
+                animator.SetBool("isFiringAuto", false);
             }
             
             // Handle left/right walking for strafing animations
@@ -131,13 +208,18 @@ public class PlayerController : MonoBehaviour {
                 animator.SetBool("isWalkingR", false);
             }
         } else {
+            // Reset all weapon animations when not aiming
             animator.SetBool("isAiming", false);
+            animator.SetBool("isAimingRifle", false);
             animator.SetBool("isFiring", false);
+            animator.SetBool("isFiringRifle", false);
             animator.SetBool("isFiringAuto", false);
             animator.SetBool("isWalkingL", false);
             animator.SetBool("isWalkingR", false);
             animator.ResetTrigger("isDivingL");
             animator.ResetTrigger("isDivingR");
+            animator.ResetTrigger("isDivingRifleL");
+            animator.ResetTrigger("isDivingRifleR");
             animator.SetBool("isStanding", false);
 
             orientation = freelookCamera; // Reset orientation to the main camera
@@ -155,8 +237,17 @@ public class PlayerController : MonoBehaviour {
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
             Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D)) {
             animator.SetBool("isWalking", true);
+            
+            // Set rifle movement animation if rifle is active
+            if (IsRifleActive()) {
+                animator.SetBool("isMovingWRifle", true);
+                Debug.Log("Setting isWalking=true while rifle is active and aiming: " + Input.GetKey(KeyCode.Mouse1));
+            } else {
+                animator.SetBool("isMovingWRifle", false);
+            }
         } else {
             animator.SetBool("isWalking", false);
+            animator.SetBool("isMovingWRifle", false);
         }
 
         // Adjust speed if sprinting
@@ -166,15 +257,34 @@ public class PlayerController : MonoBehaviour {
                 Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D)) {
                 animator.SetBool("isRunning", true);
                 animator.SetBool("isWalking", false);
+                
+                // Set rifle movement animation if rifle is active (running overrides walking)
+                if (IsRifleActive()) {
+                    animator.SetBool("isMovingWRifle", true);
+                    Debug.Log("Setting isRunning=true while rifle is active and aiming: " + Input.GetKey(KeyCode.Mouse1));
+                } else {
+                    animator.SetBool("isMovingWRifle", false);
+                }
+                
                 if(Input.GetKeyDown(KeyCode.Q)) {
-                    animator.SetBool("isDivingL", true);
+                    if (IsGunActive()) {
+                        animator.SetBool("isDivingL", true);
+                    } else if (IsRifleActive()) {
+                        animator.SetBool("isDivingRifleL", true);
+                    }
                 } else {
                     animator.SetBool("isDivingL", false);
+                    animator.SetBool("isDivingRifleL", false);
                 }
                 if(Input.GetKeyDown(KeyCode.E)) {
-                    animator.SetBool("isDivingR", true);
+                    if (IsGunActive()) {
+                        animator.SetBool("isDivingR", true);
+                    } else if (IsRifleActive()) {
+                        animator.SetBool("isDivingRifleR", true);
+                    }
                 } else {
                     animator.SetBool("isDivingR", false);
+                    animator.SetBool("isDivingRifleR", false);
                 }
                 if (Input.GetKey(KeyCode.Space)) {
                     animator.SetBool("isJumping", true);
@@ -211,7 +321,7 @@ public class PlayerController : MonoBehaviour {
         }
 
         // Handle rotation based on mode
-        if (_combatMode && IsGunActive()) {
+        if (_combatMode && IsAnyWeaponActive()) {
             // Rotate in the direction of the aim camera (ignoring vertical component)
             Vector3 targetDirection = orientation.forward;
             targetDirection.y = 0;

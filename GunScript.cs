@@ -26,6 +26,7 @@ public class GunScript : MonoBehaviour
     [Header("Weapon Settings")]
     public GameObject gunModel; // Reference to the gun's visual model
     public bool isGunActive = false; // Tracks if the gun is active
+    public RifleScript rifleScript; // Reference to the rifle script for weapon switching
 
     [Header("Camera Priority Settings")]
     [SerializeField] private int aimCameraPriority = 15;
@@ -42,6 +43,7 @@ public class GunScript : MonoBehaviour
     [Header("SFX")]
     public AudioClip gunshotSound;
     public AudioClip reloadSound;
+    public AudioClip emptyClickSound;
 
     void Start()
     {
@@ -64,12 +66,8 @@ public class GunScript : MonoBehaviour
 
     void Update()
     {
-        // Handle weapon toggle with the "1" key
-        if (Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            ToggleGun();
-        }
-
+        // Weapon switching is now handled by WeaponManager
+        
         // If the gun is not active, skip all other logic
         if (!isGunActive) return;
 
@@ -111,6 +109,10 @@ public class GunScript : MonoBehaviour
                 if (currentAmmo <= 0)
                 {
                     Debug.Log("Out of ammo! Press R to reload.");
+                    if (emptyClickSound != null)
+                    {
+                        SFXManager.instance.PlaySFXClip(emptyClickSound, transform, 1f);
+                    }
                     return;
                 }
 
@@ -127,10 +129,28 @@ public class GunScript : MonoBehaviour
             // Handle Q and E input
             if (Input.GetKeyDown(KeyCode.Q) && !isFiring)
             {
+                if (currentAmmo <= 0)
+                {
+                    Debug.Log("Out of ammo! Press R to reload.");
+                    if (emptyClickSound != null)
+                    {
+                        SFXManager.instance.PlaySFXClip(emptyClickSound, transform, 1f);
+                    }
+                    return;
+                }
                 burstCoroutine = StartCoroutine(BurstFireCoroutine());
             }
             else if (Input.GetKeyDown(KeyCode.E) && !isFiring)
             {
+                if (currentAmmo <= 0)
+                {
+                    Debug.Log("Out of ammo! Press R to reload.");
+                    if (emptyClickSound != null)
+                    {
+                        SFXManager.instance.PlaySFXClip(emptyClickSound, transform, 1f);
+                    }
+                    return;
+                }
                 burstCoroutine = StartCoroutine(BurstFireCoroutine());
             }
         }
@@ -147,11 +167,52 @@ public class GunScript : MonoBehaviour
         }
     }
 
-    void ToggleGun()
+    public void ToggleGun()
     {
         isGunActive = !isGunActive;
+        
+        // If activating gun, deactivate rifle
+        if (isGunActive && rifleScript != null && rifleScript.isRifleActive)
+        {
+            rifleScript.DeactivateRifle();
+        }
+        
         UpdateGunVisibility();
+        
+        // Set animator trigger for swapping
+        Animator animator = GetComponent<Animator>();
+        if (animator != null)
+        {
+            animator.SetTrigger("isSwapping");
+        }
+        
         Debug.Log("GunScript: Gun is now " + (isGunActive ? "active" : "inactive"));
+    }
+
+    // Method to activate gun without toggling
+    public void ActivateGun()
+    {
+        if (!isGunActive)
+        {
+            isGunActive = true;
+            UpdateGunVisibility();
+            
+            // Set animator trigger for swapping
+            Animator animator = GetComponent<Animator>();
+            if (animator != null)
+            {
+                animator.SetTrigger("isSwapping");
+            }
+            
+            Debug.Log("GunScript: Gun activated");
+        }
+    }
+
+    public void DeactivateGun()
+    {
+        isGunActive = false;
+        UpdateGunVisibility();
+        Debug.Log("GunScript: Gun deactivated by external script");
     }
 
     void UpdateGunVisibility()
@@ -167,6 +228,10 @@ public class GunScript : MonoBehaviour
         if (currentAmmo <= 0)
         {
             Debug.Log("Out of ammo! Press R to reload.");
+            if (emptyClickSound != null)
+            {
+                SFXManager.instance.PlaySFXClip(emptyClickSound, transform, 1f);
+            }
             return;
         }
 
@@ -215,12 +280,26 @@ public class GunScript : MonoBehaviour
         Debug.Log("Reloading...");
         isReloading = true;
 
+        // Trigger reload animation
+        Animator animator = GetComponent<Animator>();
+        if (animator != null)
+        {
+            animator.SetBool("isReloading", true);
+        }
+
         SFXManager.instance.PlaySFXClip(reloadSound, transform, 1f); // Play reload sound
         
         yield return new WaitForSeconds(reloadTime);
 
         currentAmmo = maxAmmo;
         isReloading = false;
+        
+        // Stop reload animation
+        if (animator != null)
+        {
+            animator.SetBool("isReloading", false);
+        }
+        
         Debug.Log("Reload complete. Ammo refilled to " + currentAmmo);
     }
 
