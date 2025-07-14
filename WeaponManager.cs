@@ -60,9 +60,13 @@ public class WeaponManager : MonoBehaviour
         if (allowScrollSwitching)
         {
             float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (scroll != 0f)
+            if (scroll > 0f)
             {
                 SwitchToNextWeapon();
+            }
+            else if (scroll < 0f)
+            {
+                SwitchToPreviousWeapon();
             }
         }
         

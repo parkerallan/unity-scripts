@@ -44,6 +44,17 @@ public class RifleScript : MonoBehaviour
     public Coroutine automaticFireCoroutine;
     public Coroutine burstCoroutine;
 
+    // Helper method to check if player is near a dialogue trigger
+    private bool IsNearDialogueTrigger() {
+        DialogueTrigger[] dialogueTriggers = FindObjectsByType<DialogueTrigger>(FindObjectsSortMode.None);
+        foreach (DialogueTrigger trigger in dialogueTriggers) {
+            if (trigger.IsPlayerInDialogueRange()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     [Header("SFX")]
     public AudioClip gunshotSound;
     public AudioClip reloadSound;
@@ -78,12 +89,31 @@ public class RifleScript : MonoBehaviour
         if (!isRifleActive) return;
 
         // Reload mechanic
-        if (isReloading) return; // Skip shooting logic while reloading
         if (Input.GetKeyDown(KeyCode.R))
         {
             StartCoroutine(Reload());
             return;
         }
+        
+        // Check for aim release even during reload
+        if (isReloading && Input.GetKeyUp(KeyCode.Mouse1))
+        {
+            if (AimCamera != null && FreeLookCamera != null)
+            {
+                FreeLookCamera.Priority = aimCameraPriority;
+                AimCamera.Priority = freeLookCameraPriority;
+                crosshair.gameObject.SetActive(false);
+            }
+            
+            // Stop automatic fire when exiting aim mode during reload
+            if (automaticFireCoroutine != null)
+            {
+                StopCoroutine(automaticFireCoroutine);
+                isFiring = false;
+            }
+        }
+        
+        if (isReloading) return; // Skip shooting logic while reloading
 
         // Remove fire mode switching since rifle is automatic-only
         // if (Input.GetKeyDown(KeyCode.F))
@@ -93,7 +123,7 @@ public class RifleScript : MonoBehaviour
         // }
 
         // When right mouse button is pressed down, switch to the aim camera
-        if (Input.GetKey(KeyCode.Mouse1))
+        if (Input.GetKey(KeyCode.Mouse1) && !IsNearDialogueTrigger())
         {
             if (AimCamera != null && FreeLookCamera != null)
             {
@@ -137,7 +167,7 @@ public class RifleScript : MonoBehaviour
                 }
             }
 
-            // Handle Q and E input for burst fire
+            // Handle Q and E input for diving burst fire
             if (Input.GetKeyDown(KeyCode.Q) && !isFiring)
             {
                 if (currentAmmo <= 0)
@@ -149,7 +179,7 @@ public class RifleScript : MonoBehaviour
                     }
                     return;
                 }
-                burstCoroutine = StartCoroutine(BurstFireCoroutine());
+                burstCoroutine = StartCoroutine(DivingBurstFireCoroutine());
             }
             else if (Input.GetKeyDown(KeyCode.E) && !isFiring)
             {
@@ -162,7 +192,7 @@ public class RifleScript : MonoBehaviour
                     }
                     return;
                 }
-                burstCoroutine = StartCoroutine(BurstFireCoroutine());
+                burstCoroutine = StartCoroutine(DivingBurstFireCoroutine());
             }
         }
 
@@ -193,6 +223,32 @@ public class RifleScript : MonoBehaviour
         if (isRifleActive && gunScript != null && gunScript.isGunActive)
         {
             gunScript.DeactivateGun();
+        }
+        
+        // If deactivating rifle, reset camera and crosshair
+        if (!isRifleActive)
+        {
+            if (AimCamera != null && FreeLookCamera != null)
+            {
+                FreeLookCamera.Priority = aimCameraPriority;
+                AimCamera.Priority = freeLookCameraPriority;
+            }
+            if (crosshair != null)
+            {
+                crosshair.gameObject.SetActive(false);
+            }
+            
+            // Stop any ongoing firing coroutines
+            if (automaticFireCoroutine != null)
+            {
+                StopCoroutine(automaticFireCoroutine);
+                isFiring = false;
+            }
+            if (burstCoroutine != null)
+            {
+                StopCoroutine(burstCoroutine);
+                isFiring = false;
+            }
         }
         
         UpdateRifleVisibility();
@@ -229,6 +285,30 @@ public class RifleScript : MonoBehaviour
     public void DeactivateRifle()
     {
         isRifleActive = false;
+        
+        // Reset camera priorities and crosshair when deactivating
+        if (AimCamera != null && FreeLookCamera != null)
+        {
+            FreeLookCamera.Priority = aimCameraPriority;
+            AimCamera.Priority = freeLookCameraPriority;
+        }
+        if (crosshair != null)
+        {
+            crosshair.gameObject.SetActive(false);
+        }
+        
+        // Stop any ongoing firing coroutines
+        if (automaticFireCoroutine != null)
+        {
+            StopCoroutine(automaticFireCoroutine);
+            isFiring = false;
+        }
+        if (burstCoroutine != null)
+        {
+            StopCoroutine(burstCoroutine);
+            isFiring = false;
+        }
+        
         UpdateRifleVisibility();
         Debug.Log("RifleScript: Rifle deactivated by external script");
     }
@@ -362,6 +442,29 @@ public class RifleScript : MonoBehaviour
 
             Shoot();
             yield return new WaitForSeconds(0.1f);
+        }
+
+        isFiring = false;
+    }
+
+    IEnumerator DivingBurstFireCoroutine()
+    {
+        if (isFiring) {
+            yield break;
+        }
+
+        isFiring = true;
+
+        for (int i = 0; i < 10; i++)
+        {
+            if (currentAmmo <= 0)
+            {
+                Debug.Log("Out of ammo! Press R to reload.");
+                break;
+            }
+
+            Shoot();
+            yield return new WaitForSeconds(0.05f);
         }
 
         isFiring = false;

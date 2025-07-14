@@ -8,6 +8,12 @@ public class DialogueTrigger : MonoBehaviour
     private bool hasDialogueEnded = false;
     private Rigidbody playerRigidbody;
 
+    // Public method to check if player is in dialogue range
+    public bool IsPlayerInDialogueRange()
+    {
+        return isPlayerInRange;
+    }
+
     // --- Smooth rotation fields ---
     public float rotationSpeed = 5f; // Degrees per second
     private Quaternion? playerTargetRotation = null;

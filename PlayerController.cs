@@ -1,11 +1,15 @@
 using UnityEngine;
+using System.Collections;
+
 public enum FireMode {
     Single,
     Burst
 }
+
 public class PlayerController : MonoBehaviour {
     [SerializeField] private float _speed = 4f;
-    [SerializeField] private float _jumpForce = 200f;
+    [SerializeField] private float _jumpForce = 300f;
+    [SerializeField] private float _gravityScale = 2f;
     [SerializeField] private Rigidbody _rb;
     
     // References for camera-based movement and combat
@@ -16,8 +20,17 @@ public class PlayerController : MonoBehaviour {
     [SerializeField] private float rotationSpeed = 10f;
     [SerializeField] public FireMode _fireMode = FireMode.Single;
     
+    // Diving system parameters
+    [Header("Diving Settings")]
+    [SerializeField] private float diveDistance = 1.5f;
+    [SerializeField] private float diveHeight = 1f;
+    [SerializeField] private float diveDuration = 0.8f;
+    [SerializeField] private AnimationCurve diveHeightCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+    
     // Remove ground check object since we now use collision callbacks
     private bool isGrounded;
+    private float groundedTimer = 0f;
+    private float coyoteTime = 0.1f; // Grace period for ground detection
     
     // Store movement input and combat mode status
     private Vector3 _moveInput;
@@ -28,6 +41,12 @@ public class PlayerController : MonoBehaviour {
 
     // Add a flag to control movement
     private bool canMove = true;
+    
+    // Diving state variables
+    private bool isDiving = false;
+    private Coroutine currentDiveCoroutine = null;
+    private float lastDiveTime = 0f;
+    private float diveCooldown = 1.0f; // Cooldown between dives
     
     private void Start() {
         Cursor.lockState = CursorLockMode.Locked;
@@ -53,6 +72,17 @@ public class PlayerController : MonoBehaviour {
         return IsGunActive() || IsRifleActive();
     }
 
+    // Helper method to check if player is near a dialogue trigger
+    private bool IsNearDialogueTrigger() {
+        DialogueTrigger[] dialogueTriggers = FindObjectsByType<DialogueTrigger>(FindObjectsSortMode.None);
+        foreach (DialogueTrigger trigger in dialogueTriggers) {
+            if (trigger.IsPlayerInDialogueRange()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Helper method to check if the gun has ammo
     private bool HasAmmo() {
         GunScript gunScript = GetComponentInChildren<GunScript>();
@@ -75,6 +105,106 @@ public class PlayerController : MonoBehaviour {
             return FireMode.Burst;
         }
         return FireMode.Single;
+    }
+
+    // Diving movement coroutine
+    private IEnumerator PerformDive(Vector3 direction) {
+        isDiving = true;
+        canMove = false; // Disable normal movement during dive
+        
+        Debug.Log("PerformDive started - direction: " + direction);
+        
+        // Store original Rigidbody settings
+        bool wasKinematic = _rb.isKinematic;
+        Vector3 startPosition = transform.position;
+        Vector3 horizontalMovement = direction * diveDistance;
+        Vector3 targetPosition = startPosition + horizontalMovement;
+        
+        // Make rigidbody kinematic during dive to prevent physics interference
+        _rb.isKinematic = true;
+        
+        float elapsedTime = 0f;
+        Vector3 lastPosition = startPosition;
+        
+        while (elapsedTime < diveDuration) {
+            elapsedTime += Time.deltaTime;
+            float normalizedTime = elapsedTime / diveDuration;
+            
+            // Calculate horizontal movement (linear)
+            Vector3 currentHorizontalPos = Vector3.Lerp(startPosition, targetPosition, normalizedTime);
+            
+            // Calculate vertical movement using curve
+            float heightOffset = diveHeightCurve.Evaluate(normalizedTime) * diveHeight;
+            
+            // Apply the movement
+            Vector3 newPosition = new Vector3(currentHorizontalPos.x, startPosition.y + heightOffset, currentHorizontalPos.z);
+            
+            // Use MovePosition for smoother Rigidbody movement
+            _rb.MovePosition(newPosition);
+            lastPosition = newPosition;
+            
+            yield return new WaitForFixedUpdate(); // Use FixedUpdate timing for physics
+        }
+        
+        // Ensure we end up at the target position
+        Vector3 finalPosition = new Vector3(targetPosition.x, startPosition.y, targetPosition.z);
+        _rb.MovePosition(finalPosition);
+        
+        // Restore rigidbody settings
+        _rb.isKinematic = wasKinematic;
+        
+        Debug.Log("PerformDive completed");
+        
+        isDiving = false;
+        canMove = true; // Re-enable normal movement
+        currentDiveCoroutine = null;
+    }
+    
+    // Helper method to start diving
+    private void StartDive(bool isLeft) {
+        // Check if player has ammo for the active weapon
+        bool hasAmmoForActiveWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
+        if (!hasAmmoForActiveWeapon) {
+            Debug.Log("Cannot dive - no ammo!");
+            return;
+        }
+        
+        // Check cooldown
+        if (Time.time - lastDiveTime < diveCooldown) {
+            Debug.Log("Dive on cooldown - " + (diveCooldown - (Time.time - lastDiveTime)).ToString("F1") + "s remaining");
+            return;
+        }
+        
+        // Don't start new dive if already diving or movement is disabled
+        if (isDiving || currentDiveCoroutine != null || !canMove) {
+            Debug.Log("Dive blocked - isDiving: " + isDiving + ", coroutine exists: " + (currentDiveCoroutine != null) + ", canMove: " + canMove);
+            return;
+        }
+        
+        // Stop any existing dive coroutine to prevent conflicts
+        if (currentDiveCoroutine != null) {
+            StopCoroutine(currentDiveCoroutine);
+            currentDiveCoroutine = null;
+        }
+        
+        Debug.Log("Starting dive - Left: " + isLeft + ", Position: " + transform.position);
+        
+        // Calculate dive direction based on player's facing direction
+        Vector3 diveDirection;
+        if (isLeft) {
+            diveDirection = -transform.right; // Left relative to player's facing
+        } else {
+            diveDirection = transform.right; // Right relative to player's facing
+        }
+        
+        // Normalize the direction to ensure consistent distance
+        diveDirection = diveDirection.normalized;
+        
+        // Record the dive time
+        lastDiveTime = Time.time;
+        
+        // Start the dive coroutine
+        currentDiveCoroutine = StartCoroutine(PerformDive(diveDirection));
     }
 
     void Update() {
@@ -111,9 +241,9 @@ public class PlayerController : MonoBehaviour {
         //     //Debug.Log("Fire mode set to: " + _fireMode);
         // }
 
-        // Set combat mode if right mouse button is held down
-        _combatMode = Input.GetMouseButton(1);
-        if (Input.GetKey(KeyCode.Mouse1) && IsAnyWeaponActive()) {
+        // Set combat mode if right mouse button is held down and not near dialogue trigger
+        _combatMode = Input.GetMouseButton(1) && !IsNearDialogueTrigger();
+        if (Input.GetKey(KeyCode.Mouse1) && IsAnyWeaponActive() && !IsNearDialogueTrigger()) {
             // Set appropriate aiming animation based on active weapon
             if (IsGunActive()) {
                 animator.SetBool("isAiming", true);
@@ -125,24 +255,42 @@ public class PlayerController : MonoBehaviour {
 
             orientation = aimCamera;
 
+            // Check if any weapon is active and has ammo - declare once for this scope
+            bool hasAmmoForActiveWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
+
             if (Input.GetKeyDown(KeyCode.Q)) {
-                if (IsGunActive()) {
-                    animator.SetTrigger("isDivingL");
-                } else if (IsRifleActive()) {
-                    animator.SetTrigger("isDivingRifleL");
+                Debug.Log("Q key pressed - diving left");
+                // Check if player has ammo before allowing dive animation
+                if (hasAmmoForActiveWeapon) {
+                    if (IsGunActive()) {
+                        animator.SetTrigger("isDivingL");
+                    } else if (IsRifleActive()) {
+                        animator.SetTrigger("isDivingRifleL");
+                    }
+                    // Start actual diving movement to the left
+                    StartDive(true);
+                } else {
+                    Debug.Log("Cannot dive - no ammo! Animation blocked.");
                 }
             } else if (Input.GetKeyDown(KeyCode.E)) {
-                if (IsGunActive()) {
-                    animator.SetTrigger("isDivingR");
-                } else if (IsRifleActive()) {
-                    animator.SetTrigger("isDivingRifleR");
+                Debug.Log("E key pressed - diving right");
+                // Check if player has ammo before allowing dive animation
+                if (hasAmmoForActiveWeapon) {
+                    if (IsGunActive()) {
+                        animator.SetTrigger("isDivingR");
+                    } else if (IsRifleActive()) {
+                        animator.SetTrigger("isDivingRifleR");
+                    }
+                    // Start actual diving movement to the right
+                    StartDive(false);
+                } else {
+                    Debug.Log("Cannot dive - no ammo! Animation blocked.");
                 }
             } else {
                 animator.SetBool("isStanding", true);
             }
 
             // Check if any weapon is active and has ammo before playing firing animations
-            bool hasAmmoForActiveWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
             
             if (IsAnyWeaponActive()) {
                 FireMode currentFireMode = GetActiveWeaponFireMode();
@@ -225,10 +373,12 @@ public class PlayerController : MonoBehaviour {
             orientation = freelookCamera; // Reset orientation to the main camera
         }
         
-        // Handle jump input (only if grounded)
-        if (Input.GetKeyDown(KeyCode.Space) && isGrounded) {
+        // Handle jump input (only if grounded or within coyote time)
+        bool canJump = isGrounded || groundedTimer > 0f;
+        if (Input.GetKeyDown(KeyCode.Space) && canJump) {
             _rb.AddForce(Vector3.up * _jumpForce);
             animator.SetBool("isJumping", true);
+            groundedTimer = 0f; // Reset timer to prevent double jumping
         } else {
             animator.SetBool("isJumping", false);
         }
@@ -266,21 +416,40 @@ public class PlayerController : MonoBehaviour {
                     animator.SetBool("isMovingWRifle", false);
                 }
                 
+                // Check ammo once for this scope
+                bool hasAmmoForRunningWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
+                
                 if(Input.GetKeyDown(KeyCode.Q)) {
-                    if (IsGunActive()) {
-                        animator.SetBool("isDivingL", true);
-                    } else if (IsRifleActive()) {
-                        animator.SetBool("isDivingRifleL", true);
+                    Debug.Log("Q key pressed while running - diving left");
+                    // Check if player has ammo before allowing dive animation
+                    if (hasAmmoForRunningWeapon) {
+                        if (IsGunActive()) {
+                            animator.SetBool("isDivingL", true);
+                        } else if (IsRifleActive()) {
+                            animator.SetBool("isDivingRifleL", true);
+                        }
+                        // Start actual diving movement to the left
+                        StartDive(true);
+                    } else {
+                        Debug.Log("Cannot dive while running - no ammo! Animation blocked.");
                     }
                 } else {
                     animator.SetBool("isDivingL", false);
                     animator.SetBool("isDivingRifleL", false);
                 }
                 if(Input.GetKeyDown(KeyCode.E)) {
-                    if (IsGunActive()) {
-                        animator.SetBool("isDivingR", true);
-                    } else if (IsRifleActive()) {
-                        animator.SetBool("isDivingRifleR", true);
+                    Debug.Log("E key pressed while running - diving right");
+                    // Check if player has ammo before allowing dive animation
+                    if (hasAmmoForRunningWeapon) {
+                        if (IsGunActive()) {
+                            animator.SetBool("isDivingR", true);
+                        } else if (IsRifleActive()) {
+                            animator.SetBool("isDivingRifleR", true);
+                        }
+                        // Start actual diving movement to the right
+                        StartDive(false);
+                    } else {
+                        Debug.Log("Cannot dive while running - no ammo! Animation blocked.");
                     }
                 } else {
                     animator.SetBool("isDivingR", false);
@@ -289,6 +458,10 @@ public class PlayerController : MonoBehaviour {
                 if (Input.GetKey(KeyCode.Space)) {
                     animator.SetBool("isJumping", true);
                 }
+            } else {
+                // Still holding shift but not moving - stop running animation
+                animator.SetBool("isRunning", false);
+                animator.SetBool("isMovingWRifle", false);
             }
         } else {
             _speed = 4f;
@@ -305,6 +478,23 @@ public class PlayerController : MonoBehaviour {
     }
     
     void FixedUpdate() {
+        // Don't apply normal movement physics during diving
+        if (isDiving) {
+            return;
+        }
+        
+        // Update grounded timer for coyote time
+        if (isGrounded) {
+            groundedTimer = coyoteTime;
+        } else {
+            groundedTimer -= Time.fixedDeltaTime;
+        }
+        
+        // Apply extra gravity when in the air to make falling feel less floaty
+        if (!isGrounded) {
+            _rb.AddForce(Vector3.down * Physics.gravity.magnitude * (_gravityScale - 1f), ForceMode.Acceleration);
+        }
+        
         // Calculate movement direction relative to the camera (ignore vertical component)
         Vector3 moveDir = (orientation.forward * _moveInput.z + orientation.right * _moveInput.x);
         moveDir.y = 0;
@@ -345,6 +535,15 @@ public class PlayerController : MonoBehaviour {
             // Consider the player grounded if the contact normal is sufficiently upwards
             if (Vector3.Dot(contact.normal, Vector3.up) > 0.5f) {
                 isGrounded = true;
+                
+                // Only stop diving when hitting the ground if we're past halfway through the dive
+                if (isDiving && currentDiveCoroutine != null) {
+                    // Check if we're in the second half of the dive (falling down)
+                    // This prevents stopping the dive too early during the upward arc
+                    Debug.Log("Ground contact during dive - considering stopping dive");
+                    // We could add additional logic here to check dive progress if needed
+                }
+                
                 return; // Once a valid contact is found, exit the method.
             }
         }
@@ -360,5 +559,15 @@ public class PlayerController : MonoBehaviour {
     // Method to enable or disable movement
     public void SetMovementEnabled(bool enabled) {
         canMove = enabled;
+    }
+    
+    // Clean up diving state when component is disabled
+    private void OnDisable() {
+        if (currentDiveCoroutine != null) {
+            StopCoroutine(currentDiveCoroutine);
+            currentDiveCoroutine = null;
+        }
+        isDiving = false;
+        canMove = true;
     }
 }

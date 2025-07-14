@@ -33,13 +33,25 @@ public class GunScript : MonoBehaviour
     [SerializeField] private int freeLookCameraPriority = 10;
 
     [Header("Ammo Settings")]
-    public int maxAmmo = 30; // Maximum ammo in the magazine
+    public int maxAmmo = 20; // Maximum ammo in the magazine
     public int currentAmmo; // Current ammo in the magazine
     public float reloadTime = 2f; // Time it takes to reload
     public bool isReloading = false;
 
     public bool isFiring = false;
     public Coroutine burstCoroutine;
+    
+    // Helper method to check if player is near a dialogue trigger
+    private bool IsNearDialogueTrigger() {
+        DialogueTrigger[] dialogueTriggers = FindObjectsByType<DialogueTrigger>(FindObjectsSortMode.None);
+        foreach (DialogueTrigger trigger in dialogueTriggers) {
+            if (trigger.IsPlayerInDialogueRange()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     [Header("SFX")]
     public AudioClip gunshotSound;
     public AudioClip reloadSound;
@@ -72,12 +84,24 @@ public class GunScript : MonoBehaviour
         if (!isGunActive) return;
 
         // Reload mechanic
-        if (isReloading) return; // Skip shooting logic while reloading
         if (Input.GetKeyDown(KeyCode.R))
         {
             StartCoroutine(Reload());
             return;
         }
+        
+        // Check for aim release even during reload
+        if (isReloading && Input.GetKeyUp(KeyCode.Mouse1))
+        {
+            if (AimCamera != null && FreeLookCamera != null)
+            {
+                FreeLookCamera.Priority = aimCameraPriority;
+                AimCamera.Priority = freeLookCameraPriority;
+                crosshair.gameObject.SetActive(false);
+            }
+        }
+        
+        if (isReloading) return; // Skip shooting logic while reloading
 
         if (Input.GetKeyDown(KeyCode.F))
         {
@@ -86,7 +110,7 @@ public class GunScript : MonoBehaviour
         }
 
         // When right mouse button is pressed down, switch to the aim camera
-        if (Input.GetKey(KeyCode.Mouse1))
+        if (Input.GetKey(KeyCode.Mouse1) && !IsNearDialogueTrigger())
         {
             if (AimCamera != null && FreeLookCamera != null)
             {
@@ -126,7 +150,7 @@ public class GunScript : MonoBehaviour
                 }
             }
 
-            // Handle Q and E input
+            // Handle Q and E input for diving burst
             if (Input.GetKeyDown(KeyCode.Q) && !isFiring)
             {
                 if (currentAmmo <= 0)
@@ -138,7 +162,7 @@ public class GunScript : MonoBehaviour
                     }
                     return;
                 }
-                burstCoroutine = StartCoroutine(BurstFireCoroutine());
+                burstCoroutine = StartCoroutine(DivingBurstFireCoroutine());
             }
             else if (Input.GetKeyDown(KeyCode.E) && !isFiring)
             {
@@ -151,7 +175,7 @@ public class GunScript : MonoBehaviour
                     }
                     return;
                 }
-                burstCoroutine = StartCoroutine(BurstFireCoroutine());
+                burstCoroutine = StartCoroutine(DivingBurstFireCoroutine());
             }
         }
 
@@ -175,6 +199,20 @@ public class GunScript : MonoBehaviour
         if (isGunActive && rifleScript != null && rifleScript.isRifleActive)
         {
             rifleScript.DeactivateRifle();
+        }
+        
+        // If deactivating gun, reset camera and crosshair
+        if (!isGunActive)
+        {
+            if (AimCamera != null && FreeLookCamera != null)
+            {
+                FreeLookCamera.Priority = aimCameraPriority;
+                AimCamera.Priority = freeLookCameraPriority;
+            }
+            if (crosshair != null)
+            {
+                crosshair.gameObject.SetActive(false);
+            }
         }
         
         UpdateGunVisibility();
@@ -211,6 +249,18 @@ public class GunScript : MonoBehaviour
     public void DeactivateGun()
     {
         isGunActive = false;
+        
+        // Reset camera priorities and crosshair when deactivating
+        if (AimCamera != null && FreeLookCamera != null)
+        {
+            FreeLookCamera.Priority = aimCameraPriority;
+            AimCamera.Priority = freeLookCameraPriority;
+        }
+        if (crosshair != null)
+        {
+            crosshair.gameObject.SetActive(false);
+        }
+        
         UpdateGunVisibility();
         Debug.Log("GunScript: Gun deactivated by external script");
     }
@@ -321,6 +371,29 @@ public class GunScript : MonoBehaviour
 
             Shoot();
             yield return new WaitForSeconds(0.1f);
+        }
+
+        isFiring = false;
+    }
+
+    IEnumerator DivingBurstFireCoroutine()
+    {
+        if (isFiring) {
+            yield break;
+        }
+
+        isFiring = true;
+
+        for (int i = 0; i < 10; i++)
+        {
+            if (currentAmmo <= 0)
+            {
+                Debug.Log("Out of ammo! Press R to reload.");
+                break;
+            }
+
+            Shoot();
+            yield return new WaitForSeconds(0.05f);
         }
 
         isFiring = false;
