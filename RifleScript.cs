@@ -18,6 +18,7 @@ public class RifleScript : MonoBehaviour
     public RectTransform crosshair;
     public RifleNamespace.FireMode _fireMode = RifleNamespace.FireMode.Automatic;
     public ParticleSystem muzzleFlash;
+    public ParticleSystem bulletCasingDrop;
     public GameObject characterImpactEffect;
     public GameObject environmentImpactEffect;
     public float impactForce = 30f;
@@ -334,6 +335,13 @@ public class RifleScript : MonoBehaviour
         }
 
         muzzleFlash.Play();
+        
+        // Play bullet casing drop effect
+        if (bulletCasingDrop != null)
+        {
+            bulletCasingDrop.Play();
+        }
+        
         currentAmmo--; // Decrease ammo count
         Debug.Log("Ammo remaining: " + currentAmmo);
         SFXManager.instance.PlaySFXClip(gunshotSound, transform, 1f); // Play gunshot sound

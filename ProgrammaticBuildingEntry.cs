@@ -150,11 +150,26 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         // Unsubscribe from the sceneLoaded event
         SceneManager.sceneLoaded -= OnSceneLoaded;
         
+        // Check for duplicate players and remove any existing ones in the scene
+        GameObject[] existingPlayers = GameObject.FindGameObjectsWithTag("Player");
+        if (enableDebugLogs)
+            Debug.Log($"ProgrammaticBuildingEntry: Found {existingPlayers.Length} player objects in scene");
+        
+        foreach (GameObject existingPlayer in existingPlayers)
+        {
+            // Only destroy players that are NOT our persistent player AND don't have DontDestroyOnLoad
+            if (existingPlayer != player && existingPlayer.scene == scene)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"ProgrammaticBuildingEntry: Destroying duplicate player: {existingPlayer.name}");
+                Destroy(existingPlayer);
+            }
+        }
+        
         if (_useSpecificPosition)
         {
             // Use the specific position and rotation provided
-            player.transform.position = _targetSpawnPosition;
-            player.transform.rotation = _targetSpawnRotation;
+            SetPlayerPosition(_targetSpawnPosition, _targetSpawnRotation);
             if (enableDebugLogs)
                 Debug.Log($"ProgrammaticBuildingEntry: Player positioned at specific location in scene '{scene.name}'");
             _useSpecificPosition = false; // Reset flag
@@ -165,8 +180,7 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
             Transform spawnPoint = FindSpawnPoint();
             if (spawnPoint != null)
             {
-                player.transform.position = spawnPoint.position;
-                player.transform.rotation = spawnPoint.rotation;
+                SetPlayerPosition(spawnPoint.position, spawnPoint.rotation);
                 if (enableDebugLogs)
                     Debug.Log($"ProgrammaticBuildingEntry: Player repositioned to spawn point: {spawnPoint.name}");
             }
@@ -201,6 +215,43 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         return spawnPointObj?.transform;
     }
     
+    /// <summary>
+    /// Properly set the player position accounting for child transform hierarchy
+    /// This method handles cases where the player has child objects (like CharModel1) that might have offsets
+    /// </summary>
+    /// <param name="targetPosition">The target world position</param>
+    /// <param name="targetRotation">The target world rotation</param>
+    private void SetPlayerPosition(Vector3 targetPosition, Quaternion targetRotation)
+    {
+        // First, set the player's rotation to align properly
+        player.transform.rotation = targetRotation;
+        
+        // Check if the player has a CharModel1 child (common naming pattern)
+        Transform charModel = player.transform.Find("CharModel1");
+        
+        if (charModel != null)
+        {
+            // If CharModel1 exists, we need to account for its local position offset
+            // Calculate the offset between the player's position and CharModel1's world position
+            Vector3 charModelWorldPos = charModel.position;
+            Vector3 offset = charModelWorldPos - player.transform.position;
+            
+            // Set the player position so that CharModel1 ends up at the target position
+            player.transform.position = targetPosition - offset;
+            
+            if (enableDebugLogs)
+                Debug.Log($"ProgrammaticBuildingEntry: Positioned player accounting for CharModel1 offset: {offset}");
+        }
+        else
+        {
+            // No CharModel1 found, position the player directly
+            player.transform.position = targetPosition;
+            
+            if (enableDebugLogs)
+                Debug.Log($"ProgrammaticBuildingEntry: No CharModel1 found, positioned player directly");
+        }
+    }
+
     // ===============================
     // Utility Methods for Common Scenarios
     // ===============================
