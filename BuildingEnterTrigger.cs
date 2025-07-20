@@ -60,6 +60,16 @@ public class BuildingEnterTrigger : MonoBehaviour
         }
 
         Debug.Log($"Entering building and loading scene: {sceneToLoad}");
+        
+        // Show the overlay immediately
+        try
+        {
+            SceneTransitionOverlay.Instance?.ShowOverlay();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"BuildingEnterTrigger: Could not show overlay: {e.Message}");
+        }
 
         // Detach the player from its parent to make it a root GameObject
         if (player.transform.parent != null)
@@ -116,6 +126,16 @@ public class BuildingEnterTrigger : MonoBehaviour
         }
 
         Debug.Log($"Scene {scene.name} loaded successfully.");
+        
+        // Hide the overlay
+        try
+        {
+            SceneTransitionOverlay.Instance?.HideOverlay();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"BuildingEnterTrigger: Could not hide overlay: {e.Message}");
+        }
     }
 
     private Transform FindSpawnPoint()
