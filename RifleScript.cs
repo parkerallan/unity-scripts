@@ -35,8 +35,13 @@ public class RifleScript : MonoBehaviour
     [Header("Ammo Settings")]
     public int maxAmmo = 30; // Maximum ammo in the magazine
     public int currentAmmo; // Current ammo in the magazine
+    public int reserveAmmo = 200; // Reserve ammunition not loaded in weapon
     public float reloadTime = 2.5f; // Time it takes to reload
     public bool isReloading = false;
+    
+    [Header("Reload Cooldown")]
+    public float reloadCooldown = 4f; // Cooldown time before allowing another reload
+    private float lastReloadTime = -999f; // Time when last reload was initiated
 
     [Header("Fire Rate Settings")]
     public float fireRate = 600f; // Rounds per minute for automatic fire
@@ -61,6 +66,10 @@ public class RifleScript : MonoBehaviour
     public AudioClip reloadSound;
     public AudioClip emptyClickSound;
 
+    [Header("UI References")]
+    public TMPro.TextMeshProUGUI ammoText; // Reference to UI text for ammo display
+    public TMPro.TextMeshProUGUI reserveAmmoText; // Reference to UI text for reserve ammo display
+
     void Start()
     {
         // Set initial camera priorities
@@ -77,6 +86,9 @@ public class RifleScript : MonoBehaviour
 
         // Initialize ammo
         currentAmmo = maxAmmo;
+        
+        // Update UI on start
+        UpdateAmmoUI();
 
         // Calculate fire delay from fire rate (RPM to seconds between shots)
         fireDelay = 60f / fireRate;
@@ -89,10 +101,32 @@ public class RifleScript : MonoBehaviour
         // If the rifle is not active, skip all other logic
         if (!isRifleActive) return;
 
-        // Reload mechanic
+        // Reload mechanic with cooldown
         if (Input.GetKeyDown(KeyCode.R))
         {
-            StartCoroutine(Reload());
+            // Check if enough time has passed since last reload attempt
+            if (Time.time - lastReloadTime >= reloadCooldown)
+            {
+                // Only reload if not at max ammo and we have reserve ammo
+                if (currentAmmo < maxAmmo && reserveAmmo > 0)
+                {
+                    lastReloadTime = Time.time;
+                    StartCoroutine(Reload());
+                }
+                else if (currentAmmo >= maxAmmo)
+                {
+                    Debug.Log("Magazine is already full!");
+                }
+                else if (reserveAmmo <= 0)
+                {
+                    Debug.Log("No reserve ammo available to reload!");
+                }
+            }
+            else
+            {
+                float remainingCooldown = reloadCooldown - (Time.time - lastReloadTime);
+                Debug.Log($"Reload on cooldown. Wait {remainingCooldown:F1}s before reloading again.");
+            }
             return;
         }
         
@@ -214,6 +248,8 @@ public class RifleScript : MonoBehaviour
                 isFiring = false;
             }
         }
+
+        UpdateAmmoUI(); // Update the ammo display in the UI
     }
 
     public void ToggleRifle()
@@ -343,6 +379,7 @@ public class RifleScript : MonoBehaviour
         }
         
         currentAmmo--; // Decrease ammo count
+        UpdateAmmoUI(); // Update UI after shooting
         Debug.Log("Ammo remaining: " + currentAmmo);
         SFXManager.instance.PlaySFXClip(gunshotSound, transform, 1f); // Play gunshot sound
 
@@ -381,6 +418,19 @@ public class RifleScript : MonoBehaviour
         }
     }
 
+    private void UpdateAmmoUI()
+    {
+        if (ammoText != null)
+        {
+            ammoText.text = currentAmmo.ToString();
+        }
+        
+        if (reserveAmmoText != null)
+        {
+            reserveAmmoText.text = reserveAmmo.ToString();
+        }
+    }
+
     IEnumerator Reload()
     {
         Debug.Log("Reloading...");
@@ -397,8 +447,18 @@ public class RifleScript : MonoBehaviour
         
         yield return new WaitForSeconds(reloadTime);
 
-        currentAmmo = maxAmmo;
+        // Calculate how much ammo we need and can take from reserves
+        int ammoNeeded = maxAmmo - currentAmmo;
+        int ammoToReload = Mathf.Min(ammoNeeded, reserveAmmo);
+        
+        // Transfer ammo from reserves to magazine
+        currentAmmo += ammoToReload;
+        reserveAmmo -= ammoToReload;
+        
         isReloading = false;
+        
+        // Update UI after reload
+        UpdateAmmoUI();
         
         // Stop reload animation
         if (animator != null)
@@ -406,7 +466,7 @@ public class RifleScript : MonoBehaviour
             animator.SetBool("isReloadingRifle", false);
         }
         
-        Debug.Log("Reload complete. Ammo refilled to " + currentAmmo);
+        Debug.Log($"Reload complete. Magazine: {currentAmmo}/{maxAmmo}, Reserve: {reserveAmmo}");
     }
 
     IEnumerator AutomaticFireCoroutine()

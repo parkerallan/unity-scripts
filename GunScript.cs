@@ -36,8 +36,13 @@ public class GunScript : MonoBehaviour
     [Header("Ammo Settings")]
     public int maxAmmo = 20; // Maximum ammo in the magazine
     public int currentAmmo; // Current ammo in the magazine
+    public int reserveAmmo = 100; // Reserve ammo not loaded in weapon
     public float reloadTime = 2f; // Time it takes to reload
     public bool isReloading = false;
+    
+    [Header("Reload Cooldown")]
+    public float reloadCooldown = 4f; // Cooldown time before allowing another reload
+    private float lastReloadTime = -999f; // Time when last reload was initiated
 
     public bool isFiring = false;
     public Coroutine burstCoroutine;
@@ -57,6 +62,12 @@ public class GunScript : MonoBehaviour
     public AudioClip gunshotSound;
     public AudioClip reloadSound;
     public AudioClip emptyClickSound;
+    public AudioClip fireModeSwitchSound; // Sound effect for fire mode switching
+
+    [Header("UI References")]
+    public TMPro.TextMeshProUGUI ammoText; // Reference to UI text for ammo display
+    public TMPro.TextMeshProUGUI reserveAmmoText; // Reference to UI text for reserve ammo display
+    public TMPro.TextMeshProUGUI fireModeText; // Reference to UI text for fire mode display
 
     void Start()
     {
@@ -74,6 +85,10 @@ public class GunScript : MonoBehaviour
 
         // Initialize ammo
         currentAmmo = maxAmmo;
+        
+        // Update UI on start
+        UpdateAmmoUI();
+        UpdateFireModeUI();
 
     }
 
@@ -84,10 +99,32 @@ public class GunScript : MonoBehaviour
         // If the gun is not active, skip all other logic
         if (!isGunActive) return;
 
-        // Reload mechanic
+        // Reload mechanic with cooldown
         if (Input.GetKeyDown(KeyCode.R))
         {
-            StartCoroutine(Reload());
+            // Check if enough time has passed since last reload attempt
+            if (Time.time - lastReloadTime >= reloadCooldown)
+            {
+                // Only reload if not at max ammo and have reserve ammo
+                if (currentAmmo < maxAmmo && reserveAmmo > 0)
+                {
+                    lastReloadTime = Time.time;
+                    StartCoroutine(Reload());
+                }
+                else if (currentAmmo >= maxAmmo)
+                {
+                    Debug.Log("Magazine is already full!");
+                }
+                else if (reserveAmmo <= 0)
+                {
+                    Debug.Log("No reserve ammo left!");
+                }
+            }
+            else
+            {
+                float remainingCooldown = reloadCooldown - (Time.time - lastReloadTime);
+                Debug.Log($"Reload on cooldown. Wait {remainingCooldown:F1}s before reloading again.");
+            }
             return;
         }
         
@@ -107,6 +144,14 @@ public class GunScript : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F))
         {
             _fireMode = (_fireMode == GunNamespace.FireMode.Single) ? GunNamespace.FireMode.Burst : GunNamespace.FireMode.Single;
+            UpdateFireModeUI(); // Update UI when fire mode changes
+            
+            // Play fire mode switch sound effect
+            if (fireModeSwitchSound != null)
+            {
+                SFXManager.instance.PlaySFXClip(fireModeSwitchSound, transform, 1f);
+            }
+            
             Debug.Log("GunScript: Fire mode set to " + _fireMode);
         }
 
@@ -295,6 +340,7 @@ public class GunScript : MonoBehaviour
         }
         
         currentAmmo--; // Decrease ammo count
+        UpdateAmmoUI(); // Update UI after shooting
         Debug.Log("Ammo remaining: " + currentAmmo);
         SFXManager.instance.PlaySFXClip(gunshotSound, transform, 1f); // Play gunshot sound
 
@@ -331,6 +377,29 @@ public class GunScript : MonoBehaviour
                 hit.rigidbody.AddForce(-hit.normal * impactForce);
             }
         }
+
+        UpdateAmmoUI(); // Update the ammo display UI
+    }
+
+    private void UpdateAmmoUI()
+    {
+        if (ammoText != null)
+        {
+            ammoText.text = currentAmmo.ToString();
+        }
+        
+        if (reserveAmmoText != null)
+        {
+            reserveAmmoText.text = reserveAmmo.ToString();
+        }
+    }
+
+    private void UpdateFireModeUI()
+    {
+        if (fireModeText != null)
+        {
+            fireModeText.text = _fireMode == GunNamespace.FireMode.Single ? "SINGLE" : "BURST";
+        }
     }
 
     IEnumerator Reload()
@@ -349,8 +418,18 @@ public class GunScript : MonoBehaviour
         
         yield return new WaitForSeconds(reloadTime);
 
-        currentAmmo = maxAmmo;
+        // Calculate how much ammo we need and can take from reserves
+        int ammoNeeded = maxAmmo - currentAmmo;
+        int ammoToReload = Mathf.Min(ammoNeeded, reserveAmmo);
+        
+        // Transfer ammo from reserves to magazine
+        currentAmmo += ammoToReload;
+        reserveAmmo -= ammoToReload;
+        
         isReloading = false;
+        
+        // Update UI after reload
+        UpdateAmmoUI();
         
         // Stop reload animation
         if (animator != null)
@@ -358,7 +437,7 @@ public class GunScript : MonoBehaviour
             animator.SetBool("isReloading", false);
         }
         
-        Debug.Log("Reload complete. Ammo refilled to " + currentAmmo);
+        Debug.Log($"Reload complete. Magazine: {currentAmmo}/{maxAmmo}, Reserve: {reserveAmmo}");
     }
 
     IEnumerator BurstFireCoroutine()
@@ -378,7 +457,7 @@ public class GunScript : MonoBehaviour
             }
 
             Shoot();
-            yield return new WaitForSeconds(0.1f);
+            yield return new WaitForSeconds(0.05f);
         }
 
         isFiring = false;

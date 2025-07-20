@@ -15,6 +15,15 @@ public class WeaponManager : MonoBehaviour
     [Header("Input Settings")]
     public KeyCode[] weaponKeys = { KeyCode.Alpha1, KeyCode.Alpha2 }; // Keys for direct weapon selection
     
+    [Header("UI Components")]
+    public GameObject gunMonitor; // Gun UI monitor
+    public GameObject rifleMonitor; // Rifle UI monitor
+    
+    [Header("Weapon Control")]
+    public bool weaponsDisabled = true; // Disable all weapons for restricted areas
+    public bool obtainedGun = false; // Has the player obtained the gun
+    public bool obtainedRifle = false; // Has the player obtained the rifle
+    
     private void Start()
     {
         // Initialize weapon system
@@ -56,6 +65,9 @@ public class WeaponManager : MonoBehaviour
     
     void HandleWeaponSwitching()
     {
+        // Don't allow weapon switching if weapons are disabled
+        if (weaponsDisabled) return;
+        
         // Handle scroll wheel switching
         if (allowScrollSwitching)
         {
@@ -108,6 +120,17 @@ public class WeaponManager : MonoBehaviour
     
     public void SwitchToWeapon(int weaponIndex)
     {
+        // Don't allow weapon switching if weapons are disabled
+        if (weaponsDisabled) return;
+        
+        // Don't allow switching to weapons that haven't been obtained
+        if (weaponIndex >= 0)
+        {
+            var weaponScript = weaponScripts[weaponIndex];
+            if (weaponScript is GunScript && !obtainedGun) return;
+            if (weaponScript is RifleScript && !obtainedRifle) return;
+        }
+        
         // Allow -1 for no weapon equipped
         if (weaponIndex < -1 || weaponIndex >= weapons.Count) return;
         if (weaponIndex == currentWeaponIndex) return; // Already active
@@ -168,10 +191,12 @@ public class WeaponManager : MonoBehaviour
         if (weaponScript is GunScript gunScript)
         {
             gunScript.ActivateGun();
+            if (gunMonitor != null) gunMonitor.SetActive(true);
         }
         else if (weaponScript is RifleScript rifleScript)
         {
             rifleScript.ActivateRifle();
+            if (rifleMonitor != null) rifleMonitor.SetActive(true);
         }
         
         // Trigger weapon swap animation
@@ -198,10 +223,12 @@ public class WeaponManager : MonoBehaviour
         if (weaponScript is GunScript gunScript)
         {
             gunScript.DeactivateGun();
+            if (gunMonitor != null) gunMonitor.SetActive(false);
         }
         else if (weaponScript is RifleScript rifleScript)
         {
             rifleScript.DeactivateRifle();
+            if (rifleMonitor != null) rifleMonitor.SetActive(false);
         }
     }
     
@@ -287,5 +314,50 @@ public class WeaponManager : MonoBehaviour
         weaponScripts.RemoveAt(weaponIndex);
         
         Debug.Log($"WeaponManager: Removed weapon. Total weapons: {weapons.Count}");
+    }
+    
+    // ===============================
+    // Programmatic Control Methods
+    // ===============================
+    
+    public void DisableWeapons()
+    {
+        weaponsDisabled = true;
+        DeactivateAllWeapons();
+        Debug.Log("WeaponManager: All weapons disabled");
+    }
+    
+    public void EnableWeapons()
+    {
+        weaponsDisabled = false;
+        Debug.Log("WeaponManager: Weapons enabled");
+    }
+    
+    public void SetObtainedGun(bool obtained)
+    {
+        obtainedGun = obtained;
+        if (!obtained && currentWeaponIndex >= 0)
+        {
+            var weaponScript = weaponScripts[currentWeaponIndex];
+            if (weaponScript is GunScript)
+            {
+                SwitchToWeapon(-1); // Deactivate if gun was active
+            }
+        }
+        Debug.Log($"WeaponManager: Gun obtained set to {obtained}");
+    }
+    
+    public void SetObtainedRifle(bool obtained)
+    {
+        obtainedRifle = obtained;
+        if (!obtained && currentWeaponIndex >= 0)
+        {
+            var weaponScript = weaponScripts[currentWeaponIndex];
+            if (weaponScript is RifleScript)
+            {
+                SwitchToWeapon(-1); // Deactivate if rifle was active
+            }
+        }
+        Debug.Log($"WeaponManager: Rifle obtained set to {obtained}");
     }
 }
