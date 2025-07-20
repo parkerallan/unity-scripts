@@ -131,6 +131,17 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
     
     private void InitiateSceneTransition(string sceneToLoad)
     {
+        // Show the overlay immediately
+        try
+        {
+            SceneTransitionOverlay.Instance?.ShowOverlay();
+        }
+        catch (System.Exception e)
+        {
+            if (enableDebugLogs)
+                Debug.LogWarning($"ProgrammaticBuildingEntry: Could not show overlay: {e.Message}");
+        }
+        
         // Detach the player from its parent to make it a root GameObject
         if (player.transform.parent != null)
         {
@@ -193,6 +204,17 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         
         if (enableDebugLogs)
             Debug.Log($"ProgrammaticBuildingEntry: Scene {scene.name} loaded successfully.");
+        
+        // Hide the overlay
+        try
+        {
+            SceneTransitionOverlay.Instance?.HideOverlay();
+        }
+        catch (System.Exception e)
+        {
+            if (enableDebugLogs)
+                Debug.LogWarning($"ProgrammaticBuildingEntry: Could not hide overlay: {e.Message}");
+        }
         
         // Reset spawn point name for next use
         _targetSpawnPointName = null;
@@ -264,21 +286,5 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
     public void ReturnToHub(string hubSceneName = "MainWorld", string spawnPointName = null)
     {
         EnterBuilding(hubSceneName, spawnPointName);
-    }
-    
-    /// <summary>
-    /// Enter a building with a fade effect (requires additional implementation)
-    /// This is a placeholder for future fade transition implementation
-    /// </summary>
-    /// <param name="sceneToLoad">Scene to load</param>
-    /// <param name="spawnPointName">Spawn point name</param>
-    /// <param name="fadeTime">Time for fade effect</param>
-    public void EnterBuildingWithFade(string sceneToLoad, string spawnPointName = null, float fadeTime = 1f)
-    {
-        // TODO: Implement fade effect
-        // For now, just call the regular enter building method
-        if (enableDebugLogs)
-            Debug.Log($"ProgrammaticBuildingEntry: Fade transition not yet implemented. Using instant transition.");
-        EnterBuilding(sceneToLoad, spawnPointName);
     }
 }
