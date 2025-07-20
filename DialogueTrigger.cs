@@ -113,7 +113,10 @@ public class DialogueTrigger : MonoBehaviour
     private void HandleDialogueEnd()
     {
         hasDialogueEnded = true;
-        Invoke(nameof(ResetDialogue), 1f);
+        if (this != null && gameObject != null && enabled)
+        {
+            Invoke(nameof(ResetDialogue), 1f);
+        }
     }
 
     private void ResetDialogue()
