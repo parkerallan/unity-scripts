@@ -2,13 +2,12 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Simple screen overlay during scene transitions - just shows a solid color
+/// Shows LoadingCanvas with image and animation during scene transitions
 /// </summary>
 public class SceneTransitionOverlay : MonoBehaviour
 {
-    [Header("Overlay Settings")]
-    public Color overlayColor = new Color(0.443f, 0.871f, 0.765f, 0f); // Transparent - no color overlay
-    public float minimumShowTime = 2.0f; // Minimum time to show overlay (increased for loading canvas)
+    [Header("Loading UI Settings")]
+    public float minimumShowTime = 3.0f; // Minimum time to show loading canvas
     
     [Header("Custom Loading UI")]
     public string loadingCanvasName = "LoadingCanvas"; // Name of canvas to find in scene
@@ -18,13 +17,15 @@ public class SceneTransitionOverlay : MonoBehaviour
     public bool enableDebugLogs = true;
     
     // Private components
-    private Canvas _overlayCanvas;
-    private Image _overlayImage;
     private GameObject _customLoadingCanvas;
+    private GameObject _createdOverlayCanvas;
     
     // State tracking
     private bool _isShowing = false;
     private float _showStartTime;
+    private Coroutine _hideCoroutine;
+    private bool _hideRequested = false;
+    private bool _minimumTimeElapsed = false;
     
     // Singleton instance for easy access
     private static SceneTransitionOverlay _instance;
@@ -60,7 +61,17 @@ public class SceneTransitionOverlay : MonoBehaviour
         _instance = this;
         DontDestroyOnLoad(gameObject);
         
-        CreateOverlayUI();
+        if (enableDebugLogs)
+            Debug.Log("SceneTransitionOverlay: Singleton instance created");
+    }
+    
+    private void Start()
+    {
+        // Ensure the overlay persists across scene changes
+        if (_instance == this)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
     }
     
     private void OnDestroy()
@@ -72,40 +83,134 @@ public class SceneTransitionOverlay : MonoBehaviour
         }
     }
     
-    private void CreateOverlayUI()
+    /// <summary>
+    /// Create or find loading canvas that persists across scenes
+    /// </summary>
+    private void CreateOrFindLoadingCanvas()
     {
-        // Create canvas
-        GameObject canvasObj = new GameObject("SimpleOverlayCanvas");
-        canvasObj.transform.SetParent(transform);
+        // First try to find existing custom loading canvas in current scene
+        if (enableCustomLoadingUI)
+        {
+            FindAndActivateCustomLoadingUI();
+            if (_customLoadingCanvas != null)
+            {
+                return; // Found existing canvas, we're done
+            }
+        }
         
-        _overlayCanvas = canvasObj.AddComponent<Canvas>();
-        _overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        _overlayCanvas.sortingOrder = 1000; // Ensure it's on top
-        
-        canvasObj.AddComponent<CanvasScaler>();
-        canvasObj.AddComponent<GraphicRaycaster>();
-        
-        // Create overlay image
-        GameObject imageObj = new GameObject("OverlayImage");
-        imageObj.transform.SetParent(canvasObj.transform);
-        
-        _overlayImage = imageObj.AddComponent<Image>();
-        _overlayImage.color = overlayColor;
-        
-        // Set up full screen rect
-        RectTransform imageRect = _overlayImage.GetComponent<RectTransform>();
-        imageRect.anchorMin = Vector2.zero;
-        imageRect.anchorMax = Vector2.one;
-        imageRect.sizeDelta = Vector2.zero;
-        imageRect.anchoredPosition = Vector2.zero;
-        
-        // Start with overlay hidden
-        _overlayCanvas.gameObject.SetActive(false);
-        
-        if (enableDebugLogs)
-            Debug.Log("SceneTransitionOverlay: Simple UI created successfully");
+        // If no custom canvas found, create a simple overlay that persists
+        if (_createdOverlayCanvas == null)
+        {
+            CreatePersistentOverlay();
+        }
+        else
+        {
+            // Reactivate existing persistent overlay
+            _createdOverlayCanvas.SetActive(true);
+            if (enableDebugLogs)
+                Debug.Log("SceneTransitionOverlay: Reactivated persistent overlay canvas");
+        }
     }
     
+    /// <summary>
+    /// Create a simple persistent loading overlay
+    /// </summary>
+    private void CreatePersistentOverlay()
+    {
+        if (enableDebugLogs)
+            Debug.Log("SceneTransitionOverlay: Creating persistent overlay canvas");
+            
+        // Create main canvas GameObject
+        _createdOverlayCanvas = new GameObject("PersistentLoadingCanvas");
+        DontDestroyOnLoad(_createdOverlayCanvas);
+        
+        // Add and configure Canvas component
+        Canvas canvas = _createdOverlayCanvas.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 1000;
+        
+        // Add CanvasScaler for proper UI scaling
+        CanvasScaler scaler = _createdOverlayCanvas.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        
+        // Add GraphicRaycaster for UI interactions
+        _createdOverlayCanvas.AddComponent<GraphicRaycaster>();
+        
+        // Create background image (semi-transparent black)
+        GameObject backgroundObj = new GameObject("Background");
+        backgroundObj.transform.SetParent(_createdOverlayCanvas.transform, false);
+        
+        Image backgroundImage = backgroundObj.AddComponent<Image>();
+        backgroundImage.color = new Color(0, 0, 0, 0.8f); // Semi-transparent black
+        
+        // Stretch background to fill screen
+        RectTransform backgroundRect = backgroundImage.rectTransform;
+        backgroundRect.anchorMin = Vector2.zero;
+        backgroundRect.anchorMax = Vector2.one;
+        backgroundRect.sizeDelta = Vector2.zero;
+        backgroundRect.anchoredPosition = Vector2.zero;
+        
+        // Create loading text
+        GameObject loadingTextObj = new GameObject("LoadingText");
+        loadingTextObj.transform.SetParent(_createdOverlayCanvas.transform, false);
+        
+        Text loadingText = loadingTextObj.AddComponent<Text>();
+        loadingText.text = "Loading...";
+        loadingText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        loadingText.fontSize = 48;
+        loadingText.color = Color.white;
+        loadingText.alignment = TextAnchor.MiddleCenter;
+        
+        // Position loading text in center
+        RectTransform textRect = loadingText.rectTransform;
+        textRect.anchorMin = new Vector2(0.5f, 0.5f);
+        textRect.anchorMax = new Vector2(0.5f, 0.5f);
+        textRect.anchoredPosition = Vector2.zero;
+        textRect.sizeDelta = new Vector2(400, 100);
+        
+        // Add simple animation to loading text
+        Animator textAnimator = loadingTextObj.AddComponent<Animator>();
+        textAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
+        
+        // Create a simple fade animation using a coroutine instead of animator
+        StartCoroutine(AnimateLoadingText(loadingText));
+        
+        _createdOverlayCanvas.SetActive(true);
+        
+        if (enableDebugLogs)
+            Debug.Log("SceneTransitionOverlay: Created persistent overlay with loading text");
+    }
+    
+    /// <summary>
+    /// Simple text animation coroutine
+    /// </summary>
+    private System.Collections.IEnumerator AnimateLoadingText(Text loadingText)
+    {
+        if (loadingText == null) yield break;
+        
+        float time = 0f;
+        Color originalColor = loadingText.color;
+        
+        while (_isShowing && loadingText != null)
+        {
+            time += Time.unscaledDeltaTime;
+            float alpha = (Mathf.Sin(time * 2f) + 1f) * 0.5f; // Pulse between 0 and 1
+            alpha = Mathf.Lerp(0.3f, 1f, alpha); // Keep it visible, just pulse
+            
+            Color newColor = originalColor;
+            newColor.a = alpha;
+            loadingText.color = newColor;
+            
+            yield return null;
+        }
+        
+        // Restore original color when done
+        if (loadingText != null)
+        {
+            loadingText.color = originalColor;
+        }
+    }
     /// <summary>
     /// Find and activate custom loading canvas if it exists
     /// </summary>
@@ -150,9 +255,21 @@ public class SceneTransitionOverlay : MonoBehaviour
             Canvas loadingCanvas = _customLoadingCanvas.GetComponent<Canvas>();
             if (loadingCanvas != null)
             {
-                // Set it to render on top of our overlay
-                loadingCanvas.sortingOrder = 1001; // Higher than our overlay (1000)
+                // Set it to render on top of everything
+                loadingCanvas.sortingOrder = 1001;
+                loadingCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                
+                // Make it persist across scene changes
+                DontDestroyOnLoad(_customLoadingCanvas);
+                
+                // Activate the canvas first
                 _customLoadingCanvas.SetActive(true);
+                
+                // Force canvas to update immediately
+                Canvas.ForceUpdateCanvases();
+                
+                // Wait a frame then trigger animations
+                StartCoroutine(TriggerAnimationsNextFrame());
                 
                 if (enableDebugLogs)
                     Debug.Log($"SceneTransitionOverlay: Found and activated custom loading canvas: {loadingCanvasName}");
@@ -172,6 +289,59 @@ public class SceneTransitionOverlay : MonoBehaviour
     }
     
     /// <summary>
+    /// Trigger animations on the next frame to ensure canvas is ready
+    /// </summary>
+    private System.Collections.IEnumerator TriggerAnimationsNextFrame()
+    {
+        yield return null; // Wait one frame
+        
+        if (_customLoadingCanvas == null) yield break;
+        
+        // Trigger the "Loading" animation on all animators
+        Animator[] animators = _customLoadingCanvas.GetComponentsInChildren<Animator>(true);
+        foreach (Animator animator in animators)
+        {
+            if (animator != null)
+            {
+                // Set the animator to use unscaled time to work during scene loading
+                animator.updateMode = AnimatorUpdateMode.UnscaledTime;
+                
+                // Enable the gameobject first
+                animator.gameObject.SetActive(true);
+                
+                // Wait another frame to ensure animator is ready
+                yield return null;
+                
+                // Trigger the animation
+                if (animator.runtimeAnimatorController != null)
+                {
+                    animator.SetTrigger("Loading");
+                    if (enableDebugLogs)
+                        Debug.Log($"SceneTransitionOverlay: Triggered 'Loading' animation on {animator.name} with unscaled time");
+                }
+            }
+        }
+        
+        // Also check for Image components named "Image" specifically
+        Image[] images = _customLoadingCanvas.GetComponentsInChildren<Image>(true);
+        foreach (Image img in images)
+        {
+            if (img.name == "Image" || img.name.ToLower().Contains("loading"))
+            {
+                img.gameObject.SetActive(true);
+                Animator imgAnimator = img.GetComponent<Animator>();
+                if (imgAnimator != null && imgAnimator.runtimeAnimatorController != null)
+                {
+                    imgAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
+                    imgAnimator.SetTrigger("Loading");
+                    if (enableDebugLogs)
+                        Debug.Log($"SceneTransitionOverlay: Found and triggered animation on Image component: {img.name}");
+                }
+            }
+        }
+    }
+    
+    /// <summary>
     /// Deactivate custom loading canvas
     /// </summary>
     private void DeactivateCustomLoadingUI()
@@ -182,91 +352,163 @@ public class SceneTransitionOverlay : MonoBehaviour
             if (enableDebugLogs)
                 Debug.Log("SceneTransitionOverlay: Deactivated custom loading canvas");
         }
+        
+        if (_createdOverlayCanvas != null)
+        {
+            _createdOverlayCanvas.SetActive(false);
+            if (enableDebugLogs)
+                Debug.Log("SceneTransitionOverlay: Deactivated created overlay canvas");
+        }
     }
     
     /// <summary>
-    /// Show the overlay immediately
+    /// Show the loading canvas with image and animation
     /// </summary>
     public void ShowOverlay()
     {
-        if (_isShowing)
-        {
-            if (enableDebugLogs)
-                Debug.LogWarning("SceneTransitionOverlay: Overlay already showing");
-            return;
-        }
-        
-        if (_overlayCanvas == null)
-        {
-            CreateOverlayUI();
-        }
-        
+        if (enableDebugLogs)
+            Debug.Log("SceneTransitionOverlay: ShowOverlay called");
+            
         _isShowing = true;
-        _showStartTime = Time.time;
-        _overlayCanvas.gameObject.SetActive(true);
+        _showStartTime = Time.unscaledTime; // Use unscaled time for accurate tracking during scene loading
+        _hideRequested = false;
+        _minimumTimeElapsed = false;
         
-        // Try to find and activate custom loading UI
-        FindAndActivateCustomLoadingUI();
+        // Stop any existing hide coroutine
+        if (_hideCoroutine != null)
+        {
+            StopCoroutine(_hideCoroutine);
+        }
+        
+        // Create or activate the LoadingCanvas BEFORE scene transition
+        CreateOrFindLoadingCanvas();
+        
+        // Start minimum time tracker using unscaled time
+        _hideCoroutine = StartCoroutine(MinimumTimeTracker());
         
         if (enableDebugLogs)
-            Debug.Log("SceneTransitionOverlay: Overlay shown");
+            Debug.Log($"SceneTransitionOverlay: LoadingCanvas shown - will hide after minimum {minimumShowTime}s AND scene load completes");
+    }
+    
+    private System.Collections.IEnumerator MinimumTimeTracker()
+    {
+        float startTime = Time.unscaledTime;
+        
+        if (enableDebugLogs)
+            Debug.Log($"SceneTransitionOverlay: Starting minimum time tracker for {minimumShowTime}s at unscaled time {startTime:F2}");
+        
+        yield return new WaitForSecondsRealtime(minimumShowTime);
+        
+        float endTime = Time.unscaledTime;
+        float actualWaitTime = endTime - startTime;
+        
+        _minimumTimeElapsed = true;
+        
+        if (enableDebugLogs)
+            Debug.Log($"SceneTransitionOverlay: Minimum time ({minimumShowTime}s) elapsed - actual wait: {actualWaitTime:F2}s");
+        
+        // Check if we can hide now (both conditions met)
+        CheckAndHideIfReady();
+        _hideCoroutine = null;
+    }
+    
+    private void CheckAndHideIfReady()
+    {
+        if (_minimumTimeElapsed && _hideRequested)
+        {
+            if (enableDebugLogs)
+                Debug.Log("SceneTransitionOverlay: Both conditions met - hiding LoadingCanvas now");
+            DoHideOverlay();
+        }
+        else if (enableDebugLogs)
+        {
+            string waiting = !_minimumTimeElapsed ? "minimum time" : "";
+            waiting += (!_minimumTimeElapsed && !_hideRequested) ? " and " : "";
+            waiting += !_hideRequested ? "scene load completion" : "";
+            Debug.Log($"SceneTransitionOverlay: Still waiting for: {waiting}");
+        }
     }
     
     /// <summary>
-    /// Hide the overlay (respects minimum show time)
+    /// Hide the loading canvas - waits for minimum time to elapse
     /// </summary>
     public void HideOverlay()
     {
-        if (!_isShowing)
+        _hideRequested = true;
+        
+        if (enableDebugLogs)
         {
-            if (enableDebugLogs)
-                Debug.LogWarning("SceneTransitionOverlay: No overlay to hide");
-            return;
+            float elapsedTime = Time.unscaledTime - _showStartTime;
+            Debug.Log($"SceneTransitionOverlay: Hide requested after {elapsedTime:F2}s - scene loading complete");
         }
         
-        float elapsedTime = Time.time - _showStartTime;
-        
-        if (elapsedTime < minimumShowTime)
-        {
-            float remainingTime = minimumShowTime - elapsedTime;
-            if (enableDebugLogs)
-                Debug.Log($"SceneTransitionOverlay: Waiting {remainingTime:F2}s more for minimum show time");
-            
-            Invoke(nameof(DoHideOverlay), remainingTime);
-        }
-        else
-        {
-            DoHideOverlay();
-        }
+        // Check if we can hide now (both conditions met)
+        CheckAndHideIfReady();
     }
     
     private void DoHideOverlay()
     {
-        if (_overlayCanvas != null)
-        {
-            _overlayCanvas.gameObject.SetActive(false);
-        }
+        // Reset state
+        _hideRequested = false;
+        _minimumTimeElapsed = false;
         
-        // Deactivate custom loading UI
+        // Only deactivate the LoadingCanvas
         DeactivateCustomLoadingUI();
         
         _isShowing = false;
         
         if (enableDebugLogs)
-            Debug.Log("SceneTransitionOverlay: Overlay hidden");
+        {
+            float totalTime = Time.unscaledTime - _showStartTime;
+            Debug.Log($"SceneTransitionOverlay: LoadingCanvas hidden after {totalTime:F2}s total");
+        }
     }
     
     /// <summary>
-    /// Force hide the overlay immediately
+    /// Force hide the loading canvas immediately
     /// </summary>
     public void ForceHideOverlay()
     {
-        CancelInvoke(nameof(DoHideOverlay));
+        if (_hideCoroutine != null)
+        {
+            StopCoroutine(_hideCoroutine);
+            _hideCoroutine = null;
+        }
         DoHideOverlay();
+        
+        if (enableDebugLogs)
+            Debug.Log("SceneTransitionOverlay: LoadingCanvas force hidden");
     }
     
     /// <summary>
-    /// Check if overlay is currently showing
+    /// Completely destroy - just deactivates loading canvas
+    /// </summary>
+    public void DestroyOverlay()
+    {
+        if (_hideCoroutine != null)
+        {
+            StopCoroutine(_hideCoroutine);
+            _hideCoroutine = null;
+        }
+        
+        DeactivateCustomLoadingUI();
+        _isShowing = false;
+        
+        if (enableDebugLogs)
+            Debug.Log("SceneTransitionOverlay: LoadingCanvas destroyed/deactivated");
+    }
+    
+    /// <summary>
+    /// Check if the loading canvas is blocking UI interactions - always returns false
+    /// </summary>
+    public bool IsBlockingUI()
+    {
+        // LoadingCanvas should never block UI interactions
+        return false;
+    }
+    
+    /// <summary>
+    /// Check if loading canvas is currently showing
     /// </summary>
     public bool IsShowing
     {

@@ -1,6 +1,8 @@
 using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class MenuManager : MonoBehaviour
 {
@@ -30,6 +32,12 @@ public class MenuManager : MonoBehaviour
 
     void Start()
     {
+        // Ensure EventSystem exists for UI interactions
+        EnsureEventSystemExists();
+        
+        // Ensure Canvas is properly configured
+        EnsureCanvasConfiguration();
+        
         // Define the most common resolutions
         resolutions = new Resolution[]
         {
@@ -60,6 +68,8 @@ public class MenuManager : MonoBehaviour
         resolutionDropdown.AddOptions(options); // Add options to the dropdown
         resolutionDropdown.value = currentResolutionIndex; // Set the current resolution index
         resolutionDropdown.RefreshShownValue(); // Refresh the dropdown to show the current value
+        
+        Debug.Log("MenuManager: Initialized successfully in scene: " + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
 
     void Update()
@@ -103,39 +113,57 @@ public class MenuManager : MonoBehaviour
             {
                 ExitMenu.SetActive(false); // Hide the modal
                 PauseMenu.SetActive(false); // Hide the pause menu
-                Time.timeScale = 1f; // Resume the game
-                Cursor.lockState = CursorLockMode.Locked; // Lock the cursor
-                Cursor.visible = false; // Hide the cursor
+                ResumeGame();
                 return;
             }
 
             if (Time.timeScale == 1f)
             {
-                // Pause the game
-                Cursor.lockState = CursorLockMode.None; // Unlock the cursor
-                Cursor.visible = true; // Show the cursor
-                Time.timeScale = 0f; // Pause the game
-                PauseMenu.SetActive(true); // Show the pause menu
+                PauseGame();
             }
             else
             {
-                // Resume the game
-                Time.timeScale = 1f; // Resume the game
-                PauseMenu.SetActive(false); // Hide the pause menu
-                Cursor.lockState = CursorLockMode.Locked; // Lock the cursor
-                Cursor.visible = false; // Hide the cursor
+                ResumeGame();
             }
         }
+    }
+
+    // Centralized method to pause the game
+    private void PauseGame()
+    {
+        Time.timeScale = 0f; // Pause the game
+        SetCursorState(true, CursorLockMode.None); // Show and unlock cursor
+        PauseMenu.SetActive(true); // Show the pause menu
+        
+        // Ensure UI interactions work properly when paused
+        Canvas.ForceUpdateCanvases();
+        
+        Debug.Log("MenuManager: Game paused");
+    }
+
+    // Centralized method to resume the game
+    private void ResumeGame()
+    {
+        Time.timeScale = 1f; // Resume the game
+        SetCursorState(false, CursorLockMode.Locked); // Hide and lock cursor
+        PauseMenu.SetActive(false); // Hide the pause menu
+        
+        Debug.Log("MenuManager: Game resumed");
+    }
+
+    // Centralized cursor state management
+    private void SetCursorState(bool visible, CursorLockMode lockMode)
+    {
+        Cursor.visible = visible;
+        Cursor.lockState = lockMode;
+        Debug.Log($"MenuManager: Cursor visibility: {visible}, Lock mode: {lockMode}");
     }
     public void ClosePauseMenu()
     {
         if (PauseMenu.activeSelf && !isSubMenuOpen)
         {
             // If the pause menu is open and no sub-menu is open, close the pause menu
-            PauseMenu.SetActive(false); // Hide the pause menu
-            Time.timeScale = 1f; // Resume the game
-            Cursor.lockState = CursorLockMode.Locked; // Lock the cursor
-            Cursor.visible = false; // Hide the cursor
+            ResumeGame();
         }
         else if (!PauseMenu.activeSelf && isSubMenuOpen)
         {
@@ -143,18 +171,15 @@ public class MenuManager : MonoBehaviour
             SoundMenu.SetActive(false); // Hide the sound menu
             VideoMenu.SetActive(false); // Hide the video menu
             isSubMenuOpen = false; // Mark that no sub-menu is open
-            Time.timeScale = 1f; // Resume the game
-            Cursor.lockState = CursorLockMode.Locked; // Lock the cursor
-            Cursor.visible = false; // Hide the cursor
+            ResumeGame();
         }
     }
+
     public void StartGame()
     {
         // Called when the player starts the game from the Main Menu
         MainMenu.SetActive(false); // Hide the Main Menu
-        Cursor.lockState = CursorLockMode.Locked; // Lock the cursor
-        Cursor.visible = false; // Hide the cursor
-        Time.timeScale = 1f; // Resume the game
+        ResumeGame();
         //isGameStarted = true; // Mark the game as started
     }
     public void OpenSoundMenu()
@@ -234,5 +259,161 @@ public class MenuManager : MonoBehaviour
         // Apply the selected screen mode
         Screen.fullScreenMode = screenMode;
         Debug.Log($"Screen mode set to: {screenMode}");
+    }
+
+    // Helper method to ensure EventSystem exists for UI interactions
+    private void EnsureEventSystemExists()
+    {
+        EventSystem eventSystem = FindFirstObjectByType<EventSystem>();
+        if (eventSystem == null)
+        {
+            Debug.LogWarning("MenuManager: No EventSystem found in scene! Creating one...");
+            GameObject eventSystemObj = new GameObject("EventSystem");
+            eventSystem = eventSystemObj.AddComponent<EventSystem>();
+            eventSystemObj.AddComponent<StandaloneInputModule>();
+            Debug.Log("MenuManager: EventSystem created successfully");
+        }
+        else
+        {
+            Debug.Log("MenuManager: EventSystem found and active");
+        }
+    }
+
+    // Helper method to ensure Canvas is properly configured for UI interactions
+    private void EnsureCanvasConfiguration()
+    {
+        // Find all canvases related to our menu system
+        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        
+        foreach (Canvas canvas in canvases)
+        {
+            // Check if this canvas contains any of our menu objects
+            if (IsMenuCanvas(canvas))
+            {
+                Debug.Log($"MenuManager: Configuring canvas: {canvas.name}");
+                
+                // Ensure Canvas has proper settings for UI interaction
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                
+                // Ensure GraphicRaycaster exists for button clicks
+                GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
+                if (raycaster == null)
+                {
+                    raycaster = canvas.gameObject.AddComponent<GraphicRaycaster>();
+                    Debug.Log($"MenuManager: Added GraphicRaycaster to {canvas.name}");
+                }
+                
+                // Ensure CanvasScaler exists for proper scaling
+                CanvasScaler scaler = canvas.GetComponent<CanvasScaler>();
+                if (scaler == null)
+                {
+                    scaler = canvas.gameObject.AddComponent<CanvasScaler>();
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920, 1080);
+                    scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+                    scaler.matchWidthOrHeight = 0.5f;
+                    Debug.Log($"MenuManager: Added CanvasScaler to {canvas.name}");
+                }
+                
+                // Make sure the canvas is set to use unscaled time for UI interactions
+                // This is crucial when Time.timeScale is set to 0
+                Canvas.ForceUpdateCanvases();
+            }
+        }
+    }
+
+    // Helper method to check if a canvas contains our menu objects
+    private bool IsMenuCanvas(Canvas canvas)
+    {
+        Transform canvasTransform = canvas.transform;
+        
+        // Check if any of our menu GameObjects are children of this canvas
+        return (PauseMenu != null && PauseMenu.transform.IsChildOf(canvasTransform)) ||
+               (SoundMenu != null && SoundMenu.transform.IsChildOf(canvasTransform)) ||
+               (VideoMenu != null && VideoMenu.transform.IsChildOf(canvasTransform)) ||
+               (ExitMenu != null && ExitMenu.transform.IsChildOf(canvasTransform)) ||
+               (MainMenu != null && MainMenu.transform.IsChildOf(canvasTransform));
+    }
+
+    // Method to fix UI interaction issues that might occur in different scenes
+    public void RefreshUIComponents()
+    {
+        Debug.Log("MenuManager: Refreshing UI components...");
+        
+        // Check for overlay blocking issues
+        CheckForOverlayBlocking();
+        
+        EnsureEventSystemExists();
+        EnsureCanvasConfiguration();
+        
+        // Force update all buttons to ensure they're properly configured
+        Button[] allButtons = FindObjectsByType<Button>(FindObjectsSortMode.None);
+        foreach (Button button in allButtons)
+        {
+            if (IsButtonInMenuSystem(button))
+            {
+                // Ensure button is interactable
+                button.interactable = true;
+                
+                // Make sure button has proper raycast target settings
+                Image buttonImage = button.GetComponent<Image>();
+                if (buttonImage != null)
+                {
+                    buttonImage.raycastTarget = true;
+                }
+            }
+        }
+        
+        Debug.Log($"MenuManager: Refreshed {allButtons.Length} buttons in scene");
+    }
+
+    // Helper method to check for and fix overlay blocking issues
+    private void CheckForOverlayBlocking()
+    {
+        // Check if SceneTransitionOverlay is blocking UI
+        if (SceneTransitionOverlay.Instance != null && SceneTransitionOverlay.Instance.IsBlockingUI())
+        {
+            Debug.LogWarning("MenuManager: SceneTransitionOverlay is blocking UI! Force hiding...");
+            SceneTransitionOverlay.Instance.ForceHideOverlay();
+        }
+        
+        // Check for any high-priority canvases that might be blocking UI
+        Canvas[] allCanvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        foreach (Canvas canvas in allCanvases)
+        {
+            if (canvas.sortingOrder >= 1000 && canvas.gameObject.activeInHierarchy)
+            {
+                GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
+                if (raycaster != null && raycaster.enabled)
+                {
+                    // Check if this is our overlay canvas
+                    if (canvas.name.Contains("OverlayCanvas") || canvas.name.Contains("Transition"))
+                    {
+                        Debug.LogWarning($"MenuManager: Found blocking overlay canvas: {canvas.name}, disabling raycaster");
+                        raycaster.enabled = false;
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper method to check if a button belongs to our menu system
+    private bool IsButtonInMenuSystem(Button button)
+    {
+        Transform buttonTransform = button.transform;
+        
+        return (PauseMenu != null && buttonTransform.IsChildOf(PauseMenu.transform)) ||
+               (SoundMenu != null && buttonTransform.IsChildOf(SoundMenu.transform)) ||
+               (VideoMenu != null && buttonTransform.IsChildOf(VideoMenu.transform)) ||
+               (ExitMenu != null && buttonTransform.IsChildOf(ExitMenu.transform)) ||
+               (MainMenu != null && buttonTransform.IsChildOf(MainMenu.transform));
+    }
+
+    // Call this method when returning from scene transitions
+    private void OnEnable()
+    {
+        Debug.Log("MenuManager: OnEnable called - refreshing UI components");
+        // Delay the refresh slightly to ensure scene is fully loaded
+        Invoke(nameof(RefreshUIComponents), 0.1f);
     }
 }

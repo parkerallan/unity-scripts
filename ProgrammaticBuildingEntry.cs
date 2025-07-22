@@ -22,13 +22,39 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
     
     private void Start()
     {
-        // Try to find the player if not assigned
-        if (player == null)
+        // Always try to find the player, even if one is assigned (in case of scene changes)
+        FindAndAssignPlayer();
+    }
+    
+    private void FindAndAssignPlayer()
+    {
+        // Try to find the player if not assigned or if the current reference is invalid
+        if (player == null || player.scene.name == null) // scene.name is null for DontDestroyOnLoad objects
         {
-            player = GameObject.FindWithTag("Player");
+            GameObject foundPlayer = GameObject.FindWithTag("Player");
+            
+            // If we found a player, check if it's a DontDestroyOnLoad player or scene player
+            if (foundPlayer != null)
+            {
+                // If our current player is null or invalid, assign the found player
+                if (player == null)
+                {
+                    player = foundPlayer;
+                    if (enableDebugLogs)
+                        Debug.Log($"ProgrammaticBuildingEntry: Auto-assigned player: {foundPlayer.name}");
+                }
+                // If we have a player but it's a scene-based duplicate, prefer the DontDestroyOnLoad one
+                else if (player.scene.name != null && foundPlayer.scene.name == null)
+                {
+                    player = foundPlayer;
+                    if (enableDebugLogs)
+                        Debug.Log($"ProgrammaticBuildingEntry: Switched to DontDestroyOnLoad player: {foundPlayer.name}");
+                }
+            }
+            
             if (player == null && enableDebugLogs)
             {
-                Debug.LogWarning("ProgrammaticBuildingEntry: No player GameObject assigned and none found with 'Player' tag.");
+                Debug.LogWarning("ProgrammaticBuildingEntry: No player GameObject found with 'Player' tag.");
             }
         }
     }
@@ -115,15 +141,13 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
             return false;
         }
         
+        // Always try to find the player before validating
+        FindAndAssignPlayer();
+        
         if (player == null)
         {
-            // Try to find the player one more time
-            player = GameObject.FindWithTag("Player");
-            if (player == null)
-            {
-                Debug.LogError("ProgrammaticBuildingEntry: Player reference is null and no GameObject with 'Player' tag found!");
-                return false;
-            }
+            Debug.LogError("ProgrammaticBuildingEntry: Player reference is null and no GameObject with 'Player' tag found!");
+            return false;
         }
         
         return true;
@@ -204,6 +228,17 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         
         if (enableDebugLogs)
             Debug.Log($"ProgrammaticBuildingEntry: Scene {scene.name} loaded successfully.");
+        
+        // Notify GameManager that we've entered a new scene
+        GameManager gameManager = Object.FindAnyObjectByType<GameManager>();
+        if (gameManager != null)
+        {
+            gameManager.OnSceneEntered();
+        }
+        else if (enableDebugLogs)
+        {
+            Debug.LogWarning("ProgrammaticBuildingEntry: GameManager not found to notify of scene entry");
+        }
         
         // Hide the overlay
         try

@@ -8,13 +8,36 @@ public class ProgrammaticDialogueTrigger : MonoBehaviour
     
     private void Start()
     {
-        // Auto-find player if not assigned
-        if (playerTransform == null)
+        // Always try to find player, even if one is assigned (in case of scene changes)
+        FindAndAssignPlayer();
+    }
+    
+    private void FindAndAssignPlayer()
+    {
+        // Try to find the player if not assigned or if the current reference is invalid
+        if (playerTransform == null || playerTransform.gameObject.scene.name == null) // scene.name is null for DontDestroyOnLoad objects
         {
-            GameObject player = GameObject.FindGameObjectWithTag("Player");
-            if (player != null)
+            GameObject foundPlayer = GameObject.FindWithTag("Player");
+            
+            if (foundPlayer != null)
             {
-                playerTransform = player.transform;
+                // If our current playerTransform is null or invalid, assign the found player
+                if (playerTransform == null)
+                {
+                    playerTransform = foundPlayer.transform;
+                    Debug.Log($"ProgrammaticDialogueTrigger: Auto-assigned player: {foundPlayer.name}");
+                }
+                // If we have a playerTransform but it's a scene-based duplicate, prefer the DontDestroyOnLoad one
+                else if (playerTransform.gameObject.scene.name != null && foundPlayer.scene.name == null)
+                {
+                    playerTransform = foundPlayer.transform;
+                    Debug.Log($"ProgrammaticDialogueTrigger: Switched to DontDestroyOnLoad player: {foundPlayer.name}");
+                }
+            }
+            
+            if (playerTransform == null)
+            {
+                Debug.LogWarning("ProgrammaticDialogueTrigger: No player GameObject found with 'Player' tag.");
             }
         }
     }
@@ -310,6 +333,9 @@ public class ProgrammaticDialogueTrigger : MonoBehaviour
             Debug.LogWarning("ProgrammaticDialogueTrigger: Dialogue is already active!");
             return;
         }
+        
+        // Always try to find the player before getting Rigidbody
+        FindAndAssignPlayer();
         
         // Get the player's Rigidbody
         Rigidbody playerRigidbody = null;
