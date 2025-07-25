@@ -390,25 +390,34 @@ public class RifleScript : MonoBehaviour
         {
             Debug.Log("Hit: " + hit.transform.name + " at distance " + hit.distance);
 
+            // Check if the hit object has a Target component and apply damage
             Target target = hit.transform.GetComponent<Target>();
             if (target != null)
             {
                 target.TakeDamage(damage);
-
-                if (characterImpactEffect != null)
-                {
-                    GameObject impactObj = Instantiate(characterImpactEffect, hit.point, Quaternion.LookRotation(hit.normal));
-                    impactObj.transform.SetParent(hit.transform);
-                    Destroy(impactObj, 1.0f);
-                }
             }
-            else
+            
+            // Check if we hit an enemy AI and alert them
+            EnemyAIController enemyAI = hit.transform.GetComponent<EnemyAIController>();
+            if (enemyAI != null)
             {
-                if (environmentImpactEffect != null)
-                {
-                    GameObject impactObj = Instantiate(environmentImpactEffect, hit.point, Quaternion.LookRotation(hit.normal));
-                    Destroy(impactObj, 1.0f);
-                }
+                enemyAI.OnHitByPlayer();
+            }
+
+            // Determine impact effect based on layer
+            string layerName = LayerMask.LayerToName(hit.transform.gameObject.layer);
+            bool isCharacter = layerName == "Enemy" || layerName == "Player";
+            
+            if (isCharacter && characterImpactEffect != null)
+            {
+                GameObject impactObj = Instantiate(characterImpactEffect, hit.point, Quaternion.LookRotation(hit.normal));
+                impactObj.transform.SetParent(hit.transform);
+                Destroy(impactObj, 1.0f);
+            }
+            else if (!isCharacter && environmentImpactEffect != null)
+            {
+                GameObject impactObj = Instantiate(environmentImpactEffect, hit.point, Quaternion.LookRotation(hit.normal));
+                Destroy(impactObj, 1.0f);
             }
 
             if (hit.rigidbody != null)
