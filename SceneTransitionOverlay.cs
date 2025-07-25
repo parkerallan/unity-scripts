@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class SceneTransitionOverlay : MonoBehaviour
 {
     [Header("Loading UI Settings")]
-    public float minimumShowTime = 3.0f; // Minimum time to show loading canvas
+    public float minimumShowTime = 1.5f; // Minimum time to show loading canvas
     
     [Header("Custom Loading UI")]
     public string loadingCanvasName = "LoadingCanvas"; // Name of canvas to find in scene
