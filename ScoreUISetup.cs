@@ -15,9 +15,9 @@ public class ScoreUISetup : MonoBehaviour
     public bool createPointsPopup = true;
     
     [Header("UI Positioning")]
-    public Vector2 scorePosition = new Vector2(-200, 200); // Top-left area
-    public Vector2 comboPosition = new Vector2(0, 150); // Center-top area
-    public Vector2 popupPosition = new Vector2(0, 0); // Center screen
+    public Vector2 scorePosition = new Vector2(700, 200); // Top-left area
+    public Vector2 comboPosition = new Vector2(700, 175); // Center-top area
+    public Vector2 popupPosition = new Vector2(700, 140); // Center screen
     
     [Header("UI Styling")]
     public int scoreFontSize = 24;
