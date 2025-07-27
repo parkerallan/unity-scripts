@@ -47,14 +47,30 @@ public class GunScript : MonoBehaviour
     public bool isFiring = false;
     public Coroutine burstCoroutine;
     
-    // Helper method to check if player is near a dialogue trigger
+    // Helper method to check if player is near a dialogue trigger, building enter trigger, or auto dialogue is active
     private bool IsNearDialogueTrigger() {
+        // Check DialogueTrigger
         DialogueTrigger[] dialogueTriggers = FindObjectsByType<DialogueTrigger>(FindObjectsSortMode.None);
         foreach (DialogueTrigger trigger in dialogueTriggers) {
             if (trigger.IsPlayerInDialogueRange()) {
                 return true;
             }
         }
+
+        // Check BuildingEnterTrigger
+        BuildingEnterTrigger[] buildingTriggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
+        foreach (BuildingEnterTrigger trigger in buildingTriggers) {
+            if (trigger.isPlayerInRange) {
+                return true;
+            }
+        }
+
+        // Check if AutoDialogueTrigger is active (dialogue is running)
+        DialogueManager dialogueManager = FindAnyObjectByType<DialogueManager>();
+        if (dialogueManager != null && dialogueManager.IsDialogueActive()) {
+            return true;
+        }
+
         return false;
     }
     
@@ -199,6 +215,13 @@ public class GunScript : MonoBehaviour
             // Handle Q and E input for diving burst
             if (Input.GetKeyDown(KeyCode.Q) && !isFiring)
             {
+                // Check if near any trigger that should prevent dive firing
+                if (IsNearDialogueTrigger())
+                {
+                    Debug.Log("GunScript: Cannot dive fire - near dialogue/building trigger!");
+                    return;
+                }
+                
                 if (currentAmmo <= 0)
                 {
                     Debug.Log("Out of ammo! Press R to reload.");
@@ -212,6 +235,13 @@ public class GunScript : MonoBehaviour
             }
             else if (Input.GetKeyDown(KeyCode.E) && !isFiring)
             {
+                // Check if near any trigger that should prevent dive firing
+                if (IsNearDialogueTrigger())
+                {
+                    Debug.Log("GunScript: Cannot dive fire - near dialogue/building trigger!");
+                    return;
+                }
+                
                 if (currentAmmo <= 0)
                 {
                     Debug.Log("Out of ammo! Press R to reload.");
@@ -223,6 +253,18 @@ public class GunScript : MonoBehaviour
                 }
                 burstCoroutine = StartCoroutine(DivingBurstFireCoroutine());
             }
+        }
+
+        // Force exit aim mode if player gets near a trigger while aiming
+        if (Input.GetKey(KeyCode.Mouse1) && IsNearDialogueTrigger())
+        {
+            if (AimCamera != null && FreeLookCamera != null)
+            {
+                FreeLookCamera.Priority = aimCameraPriority;
+                AimCamera.Priority = freeLookCameraPriority;
+                crosshair.gameObject.SetActive(false);
+            }
+            Debug.Log("GunScript: Forced exit from aim mode - near dialogue/building trigger!");
         }
 
         // When right mouse button is released, revert back to the main camera

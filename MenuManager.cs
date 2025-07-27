@@ -135,6 +135,9 @@ public class MenuManager : MonoBehaviour
         SetCursorState(true, CursorLockMode.None); // Show and unlock cursor
         PauseMenu.SetActive(true); // Show the pause menu
         
+        // Disable player controls
+        DisablePlayerControls();
+        
         // Ensure UI interactions work properly when paused
         Canvas.ForceUpdateCanvases();
         
@@ -148,6 +151,9 @@ public class MenuManager : MonoBehaviour
         SetCursorState(false, CursorLockMode.Locked); // Hide and lock cursor
         PauseMenu.SetActive(false); // Hide the pause menu
         
+        // Re-enable player controls
+        EnablePlayerControls();
+        
         Debug.Log("MenuManager: Game resumed");
     }
 
@@ -157,6 +163,114 @@ public class MenuManager : MonoBehaviour
         Cursor.visible = visible;
         Cursor.lockState = lockMode;
         Debug.Log($"MenuManager: Cursor visibility: {visible}, Lock mode: {lockMode}");
+    }
+
+    // Disable all player controls when paused
+    private void DisablePlayerControls()
+    {
+        // Disable PlayerController
+        PlayerController playerController = FindAnyObjectByType<PlayerController>();
+        if (playerController != null)
+        {
+            playerController.enabled = false;
+            Debug.Log("MenuManager: PlayerController disabled");
+        }
+
+        // Disable UnderwaterPlayerController
+        UnderwaterPlayerController underwaterController = FindAnyObjectByType<UnderwaterPlayerController>();
+        if (underwaterController != null)
+        {
+            underwaterController.enabled = false;
+            Debug.Log("MenuManager: UnderwaterPlayerController disabled");
+        }
+
+        // Disable weapon scripts
+        GunScript gunScript = FindAnyObjectByType<GunScript>();
+        if (gunScript != null)
+        {
+            gunScript.enabled = false;
+            Debug.Log("MenuManager: GunScript disabled");
+        }
+
+        RifleScript rifleScript = FindAnyObjectByType<RifleScript>();
+        if (rifleScript != null)
+        {
+            rifleScript.enabled = false;
+            Debug.Log("MenuManager: RifleScript disabled");
+        }
+
+        // Disable WeaponManager
+        WeaponManager weaponManager = FindAnyObjectByType<WeaponManager>();
+        if (weaponManager != null)
+        {
+            weaponManager.enabled = false;
+            Debug.Log("MenuManager: WeaponManager disabled");
+        }
+
+        // Disable all building enter triggers
+        BuildingEnterTrigger[] buildingTriggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
+        foreach (BuildingEnterTrigger trigger in buildingTriggers)
+        {
+            trigger.enabled = false;
+        }
+        if (buildingTriggers.Length > 0)
+        {
+            Debug.Log($"MenuManager: {buildingTriggers.Length} BuildingEnterTriggers disabled");
+        }
+    }
+
+    // Re-enable all player controls when resumed
+    private void EnablePlayerControls()
+    {
+        // Enable PlayerController
+        PlayerController playerController = FindAnyObjectByType<PlayerController>();
+        if (playerController != null)
+        {
+            playerController.enabled = true;
+            Debug.Log("MenuManager: PlayerController enabled");
+        }
+
+        // Enable UnderwaterPlayerController
+        UnderwaterPlayerController underwaterController = FindAnyObjectByType<UnderwaterPlayerController>();
+        if (underwaterController != null)
+        {
+            underwaterController.enabled = true;
+            Debug.Log("MenuManager: UnderwaterPlayerController enabled");
+        }
+
+        // Enable weapon scripts
+        GunScript gunScript = FindAnyObjectByType<GunScript>();
+        if (gunScript != null)
+        {
+            gunScript.enabled = true;
+            Debug.Log("MenuManager: GunScript enabled");
+        }
+
+        RifleScript rifleScript = FindAnyObjectByType<RifleScript>();
+        if (rifleScript != null)
+        {
+            rifleScript.enabled = true;
+            Debug.Log("MenuManager: RifleScript enabled");
+        }
+
+        // Enable WeaponManager
+        WeaponManager weaponManager = FindAnyObjectByType<WeaponManager>();
+        if (weaponManager != null)
+        {
+            weaponManager.enabled = true;
+            Debug.Log("MenuManager: WeaponManager enabled");
+        }
+
+        // Enable all building enter triggers
+        BuildingEnterTrigger[] buildingTriggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
+        foreach (BuildingEnterTrigger trigger in buildingTriggers)
+        {
+            trigger.enabled = true;
+        }
+        if (buildingTriggers.Length > 0)
+        {
+            Debug.Log($"MenuManager: {buildingTriggers.Length} BuildingEnterTriggers enabled");
+        }
     }
     public void ClosePauseMenu()
     {

@@ -77,9 +77,10 @@ public class PlayerController : MonoBehaviour
         return IsGunActive() || IsRifleActive();
     }
 
-    // Helper method to check if player is near a dialogue trigger
+    // Helper method to check if player is near a dialogue trigger, building enter trigger, or auto dialogue is active
     private bool IsNearDialogueTrigger()
     {
+        // Check DialogueTrigger
         DialogueTrigger[] dialogueTriggers = FindObjectsByType<DialogueTrigger>(FindObjectsSortMode.None);
         foreach (DialogueTrigger trigger in dialogueTriggers)
         {
@@ -88,6 +89,24 @@ public class PlayerController : MonoBehaviour
                 return true;
             }
         }
+
+        // Check BuildingEnterTrigger
+        BuildingEnterTrigger[] buildingTriggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
+        foreach (BuildingEnterTrigger trigger in buildingTriggers)
+        {
+            if (trigger.isPlayerInRange)
+            {
+                return true;
+            }
+        }
+
+        // Check if AutoDialogueTrigger is active (dialogue is running)
+        DialogueManager dialogueManager = FindAnyObjectByType<DialogueManager>();
+        if (dialogueManager != null && dialogueManager.IsDialogueActive())
+        {
+            return true;
+        }
+
         return false;
     }
 
@@ -179,6 +198,13 @@ public class PlayerController : MonoBehaviour
     // Helper method to start diving
     private void StartDive(bool isLeft)
     {
+        // Check if player is near any trigger that should prevent diving
+        if (IsNearDialogueTrigger())
+        {
+            Debug.Log("Cannot dive - near dialogue/building trigger!");
+            return;
+        }
+
         // Check if player has ammo for the active weapon
         bool hasAmmoForActiveWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
         if (!hasAmmoForActiveWeapon)

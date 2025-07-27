@@ -6,7 +6,7 @@ using System.Collections;
 public class Target : MonoBehaviour
 {
     public float health = 50f;
-    private float maxHealth; // Store the original max health
+    public float maxHealth { get; private set; } // Store the original max health - publicly readable
     
     [Header("Target Info")]
     public string targetName = "Enemy"; // Name to display in health bar
@@ -152,6 +152,9 @@ public class Target : MonoBehaviour
         
         health -= amount;
         
+        // Check if this target has a boss AI controller and notify it of being hit
+        NotifyBossControllerOnHit();
+        
         // Show and update health bar
         if (isPlayer)
         {
@@ -174,6 +177,39 @@ public class Target : MonoBehaviour
         if (health <= 0f)
         {
             Die();
+        }
+    }
+    
+    private void NotifyBossControllerOnHit()
+    {
+        // Try to find and notify any boss controller on this GameObject
+        var oneBController = GetComponent<oneBController>();
+        if (oneBController != null)
+        {
+            oneBController.OnHitByPlayer();
+            return;
+        }
+        
+        var oneCController = GetComponent<oneCController>();
+        if (oneCController != null)
+        {
+            oneCController.OnHitByPlayer();
+            return;
+        }
+        
+        var twoBController = GetComponent<twoBController>();
+        if (twoBController != null)
+        {
+            twoBController.OnHitByPlayer();
+            return;
+        }
+        
+        // Also check the regular enemy AI controller
+        var enemyAI = GetComponent<EnemyAIController>();
+        if (enemyAI != null)
+        {
+            enemyAI.OnHitByPlayer();
+            return;
         }
     }
     

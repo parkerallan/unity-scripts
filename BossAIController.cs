@@ -1,50 +1,45 @@
 using UnityEngine;
-using UnityEngine.Animations;
 using UnityEngine.AI;
 
-public class twoBController : MonoBehaviour
+public class BossAIController : MonoBehaviour
 {
-    [Header("Animation Settings")]
-    public Animator twoBAnimator;
-
-    [Header("Boss AI Settings")]
     public NavMeshAgent agent;
     public Transform player;
     public LayerMask whatIsGround, whatIsPlayer;
 
     [Header("Boss Settings")]
-    public string bossName = "Two-B";
+    public string bossName = "Boss";
     public bool isActive = false; // Boss AI is inactive until triggered
     public float activationDelay = 2f; // Delay after activation for dramatic effect
 
     [Header("Combat Stats")]
-    public float timeBetweenAttacks = 1.8f; // Slightly slower but more powerful
-    public float attackAccuracy = 0.8f; // Good accuracy
-    public float attackDamage = 35f; // Moderate damage
+    public float timeBetweenAttacks = 1.5f; // Faster than regular enemies
+    public float attackAccuracy = 0.85f; // Higher accuracy than regular enemies
+    public float attackDamage = 40f; // Higher damage
     public LayerMask attackLayers = -1;
 
     [Header("Boss Phases")]
     public bool useHealthPhases = true;
     public float phase2HealthThreshold = 0.6f; // 60% health
     public float phase3HealthThreshold = 0.3f; // 30% health
-    public float phase2AttackSpeedMultiplier = 1.25f;
-    public float phase3AttackSpeedMultiplier = 1.5f;
+    public float phase2AttackSpeedMultiplier = 1.3f;
+    public float phase3AttackSpeedMultiplier = 1.6f;
     public float phase2AccuracyBonus = 0.1f;
     public float phase3AccuracyBonus = 0.15f;
 
     [Header("Movement")]
-    public float sightRange = 22f; // Moderate sight range
-    public float attackRange = 12f; // Moderate attack range
-    public float circleStrafingRadius = 7f;
-    public float strafingSpeed = 2.5f;
+    public float sightRange = 25f; // Larger sight range
+    public float attackRange = 15f; // Longer attack range
+    public float circleStrafingRadius = 8f;
+    public float strafingSpeed = 3f;
     public bool enableCircleStrafing = true;
 
     [Header("Aggression System")]
     public float maxAggression = 100f;
-    public float aggressionDecayRate = 6f; // Moderate decay
-    public float aggressionOnHit = 20f; // Moderate aggression gain
-    public float aggressionThresholdForRush = 75f; // Takes more to trigger rush
-    public float rushSpeed = 7f;
+    public float aggressionDecayRate = 5f;
+    public float aggressionOnHit = 25f;
+    public float aggressionThresholdForRush = 70f;
+    public float rushSpeed = 8f;
 
     [Header("Attack Effects")]
     public AudioSource attackSFX;
@@ -57,11 +52,8 @@ public class twoBController : MonoBehaviour
     public AudioClip activationSound;
     public AudioClip phaseChangeSound;
 
-    [Header("Two-B Specific Animations")]
-    public string walkAnimationTrigger = "Walk";
-    public string attackAnimationTrigger = "Attack";
-    public string rushAnimationTrigger = "Rush";
-    public string idleAnimationTrigger = "Idle";
+    [Header("Animation Controller Reference")]
+    public MonoBehaviour animationController; // Reference to oneB, oneC, twoB controllers
 
     // Private variables
     private bool alreadyAttacked;
@@ -77,15 +69,8 @@ public class twoBController : MonoBehaviour
     private void Awake()
     {
         player = GameObject.Find("CharModel1").transform;
-        
-        if (agent == null)
-            agent = GetComponent<NavMeshAgent>();
-            
+        agent = GetComponent<NavMeshAgent>();
         bossTarget = GetComponent<Target>();
-        
-        // Auto-assign animator if not set
-        if (twoBAnimator == null)
-            twoBAnimator = GetComponent<Animator>();
         
         // Store original values
         originalTimeBetweenAttacks = timeBetweenAttacks;
@@ -126,7 +111,7 @@ public class twoBController : MonoBehaviour
     {
         if (!useHealthPhases || bossTarget == null) return;
 
-        float healthPercentage = bossTarget.health / bossTarget.maxHealth; // Use actual max health
+        float healthPercentage = bossTarget.health / 100f; // Assuming max health is 100
         int newPhase = 1;
 
         if (healthPercentage <= phase3HealthThreshold)
@@ -165,7 +150,7 @@ public class twoBController : MonoBehaviour
         }
 
         // Add aggression when phase changes
-        AddAggression(25f);
+        AddAggression(30f);
     }
 
     private void UpdateBehavior()
@@ -192,11 +177,6 @@ public class twoBController : MonoBehaviour
                 ChasePlayer();
             }
         }
-        else
-        {
-            // Player not in sight, play idle animation
-            PlayIdleAnimation();
-        }
     }
 
     private void CircleStrafing()
@@ -212,15 +192,11 @@ public class twoBController : MonoBehaviour
         );
         
         Vector3 targetPosition = player.position + offset;
-        agent.speed = 3.5f; // Ensure speed is set
         agent.SetDestination(targetPosition);
 
         // Look at player while strafing
         Vector3 lookDirection = (player.position - transform.position).normalized;
         transform.rotation = Quaternion.LookRotation(lookDirection);
-
-        // Play walk animation while circle strafing
-        PlayWalkAnimation();
     }
 
     private void RushPlayer()
@@ -231,21 +207,14 @@ public class twoBController : MonoBehaviour
         agent.SetDestination(player.position);
         
         Debug.Log($"{bossName} is rushing the player with high aggression!");
-        
-        // Play rush animation
-        PlayRushAnimation();
     }
 
     private void ChasePlayer()
     {
         if (player == null || !agent.isOnNavMesh || !agent.enabled) return;
 
-        // Set normal movement speed
-        agent.speed = 3.5f;
+        agent.speed = agent.speed; // Reset to normal speed
         agent.SetDestination(player.position);
-        
-        // Play walk animation while chasing
-        PlayWalkAnimation();
     }
 
     private void AttackPlayer()
@@ -262,9 +231,6 @@ public class twoBController : MonoBehaviour
 
         if (!alreadyAttacked)
         {
-            // Play attack animation
-            PlayAttackAnimation();
-            
             PerformRaycastAttack();
             alreadyAttacked = true;
             Invoke(nameof(ResetAttack), timeBetweenAttacks);
@@ -303,22 +269,22 @@ public class twoBController : MonoBehaviour
 
         if (hitRoll <= attackAccuracy)
         {
-            // Accurate shot with small deviation
+            // Very accurate shot with minimal deviation
             Vector3 deviation = new Vector3(
-                Random.Range(-0.07f, 0.07f),
-                Random.Range(-0.07f, 0.07f),
-                Random.Range(-0.07f, 0.07f)
+                Random.Range(-0.05f, 0.05f),
+                Random.Range(-0.05f, 0.05f),
+                Random.Range(-0.05f, 0.05f)
             );
             attackDirection = (baseDirection + deviation).normalized;
-            Debug.Log($"{bossName} attack: SOLID HIT!");
+            Debug.Log($"{bossName} attack: ACCURATE SHOT!");
         }
         else
         {
-            // Miss - moderate accuracy
+            // Miss - but still more accurate than regular enemies
             Vector3 missDeviation = new Vector3(
-                Random.Range(-0.7f, 0.7f),
-                Random.Range(-0.4f, 0.4f),
-                Random.Range(-0.7f, 0.7f)
+                Random.Range(-0.5f, 0.5f),
+                Random.Range(-0.3f, 0.3f),
+                Random.Range(-0.5f, 0.5f)
             );
             attackDirection = (baseDirection + missDeviation).normalized;
             Debug.Log($"{bossName} attack: MISSED!");
@@ -327,7 +293,7 @@ public class twoBController : MonoBehaviour
         // Perform raycast attack
         Ray attackRay = new Ray(transform.position + Vector3.up * 1.5f, attackDirection);
         RaycastHit hit;
-        float maxAttackRange = 45f;
+        float maxAttackRange = 50f;
 
         if (Physics.Raycast(attackRay, out hit, maxAttackRange, attackLayers))
         {
@@ -361,51 +327,6 @@ public class twoBController : MonoBehaviour
     private void ResetAttack()
     {
         alreadyAttacked = false;
-    }
-
-    // Animation Methods - Customize these for Two-B specific animations
-    private void PlayWalkAnimation()
-    {
-        if (twoBAnimator != null && !string.IsNullOrEmpty(walkAnimationTrigger))
-        {
-            twoBAnimator.SetTrigger(walkAnimationTrigger);
-        }
-    }
-
-    private void PlayAttackAnimation()
-    {
-        if (twoBAnimator != null && !string.IsNullOrEmpty(attackAnimationTrigger))
-        {
-            twoBAnimator.SetTrigger(attackAnimationTrigger);
-        }
-    }
-
-    private void PlayRushAnimation()
-    {
-        if (twoBAnimator != null && !string.IsNullOrEmpty(rushAnimationTrigger))
-        {
-            twoBAnimator.SetTrigger(rushAnimationTrigger);
-        }
-    }
-
-    private void PlayIdleAnimation()
-    {
-        if (twoBAnimator != null && !string.IsNullOrEmpty(idleAnimationTrigger))
-        {
-            twoBAnimator.SetTrigger(idleAnimationTrigger);
-        }
-    }
-
-    public void playDeathAnimation()
-    {
-        if (twoBAnimator != null)
-        {
-            twoBAnimator.SetTrigger("Death");
-        }
-        else
-        {
-            Debug.LogError("twoBAnimator is not assigned in twoBController.");
-        }
     }
 
     /// <summary>
@@ -443,14 +364,6 @@ public class twoBController : MonoBehaviour
         if (agent != null)
         {
             agent.enabled = true;
-            
-            // Ensure agent has proper speed settings
-            if (agent.speed <= 0)
-            {
-                agent.speed = 3.5f; // Default movement speed
-            }
-            
-            Debug.Log($"{bossName} AI activated! Agent speed: {agent.speed}, On NavMesh: {agent.isOnNavMesh}");
         }
         
         Debug.Log($"{bossName} is now active and hunting the player!");
@@ -471,6 +384,37 @@ public class twoBController : MonoBehaviour
     public void AddAggression(float amount)
     {
         currentAggression = Mathf.Min(maxAggression, currentAggression + amount);
+    }
+
+    /// <summary>
+    /// Trigger death animation through the assigned animation controller
+    /// </summary>
+    public void TriggerDeathAnimation()
+    {
+        if (animationController != null)
+        {
+            // Try different controller types
+            if (animationController is oneBController oneB)
+            {
+                oneB.playDeathAnimation();
+            }
+            else if (animationController is oneCController oneC)
+            {
+                oneC.PlayDeathAnimation();
+            }
+            else if (animationController is twoBController twoB)
+            {
+                twoB.playDeathAnimation();
+            }
+            else
+            {
+                Debug.LogWarning($"Unknown animation controller type: {animationController.GetType()}");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("No animation controller assigned to boss!");
+        }
     }
 
     /// <summary>

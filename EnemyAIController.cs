@@ -15,6 +15,14 @@ public class EnemyAIController : MonoBehaviour
   // Attacking
   public float timeBetweenAttacks;
   bool alreadyAttacked;
+  public float attackAccuracy = 0.7f; // 70% chance to hit (0.0 = always miss, 1.0 = always hit)
+  public float attackDamage = 25f;
+  public LayerMask attackLayers = -1; // What the raycast can hit
+  
+  [Header("Attack Effects")]
+  public AudioSource attackSFX; // Optional sound effect when attacking
+  public ParticleSystem muzzleFlash; // Optional particle effect at attack origin
+  public ParticleSystem casingEffect; // Optional particle effect for bullet casing ejection
 
   // States
   public float sightRange, attackRange;
@@ -114,11 +122,100 @@ public class EnemyAIController : MonoBehaviour
 
     if (!alreadyAttacked)
     {
-        // Attack code here (e.g., shoot, melee, etc.)
-        Debug.Log("Attacking Player!");
+        PerformRaycastAttack();
 
         alreadyAttacked = true;
         Invoke(nameof(ResetAttack), timeBetweenAttacks);
+    }
+  }
+  
+  private void PerformRaycastAttack()
+  {
+    if (player == null) return;
+
+    // Play attack sound effect
+    if (attackSFX != null)
+    {
+        attackSFX.Play();
+    }
+    
+    // Play muzzle flash effect
+    if (muzzleFlash != null)
+    {
+        muzzleFlash.Play();
+    }
+    
+    // Play bullet casing ejection effect
+    if (casingEffect != null)
+    {
+        casingEffect.Play();
+    }
+
+    // Calculate attack direction with accuracy variation
+    Vector3 baseDirection = (player.position - transform.position).normalized;
+    
+    // Add inaccuracy based on attackAccuracy
+    float hitRoll = Random.Range(0f, 1f);
+    Vector3 attackDirection;
+    
+    if (hitRoll <= attackAccuracy)
+    {
+        // Accurate shot - small random deviation
+        Vector3 deviation = new Vector3(
+            Random.Range(-0.1f, 0.1f),
+            Random.Range(-0.1f, 0.1f),
+            Random.Range(-0.1f, 0.1f)
+        );
+        attackDirection = (baseDirection + deviation).normalized;
+        Debug.Log("Enemy attack: ACCURATE SHOT!");
+    }
+    else
+    {
+        // Miss - larger random deviation
+        Vector3 missDeviation = new Vector3(
+            Random.Range(-1f, 1f),
+            Random.Range(-0.5f, 0.5f),
+            Random.Range(-1f, 1f)
+        );
+        attackDirection = (baseDirection + missDeviation).normalized;
+        Debug.Log("Enemy attack: MISSED!");
+    }
+
+    // Perform raycast attack
+    Ray attackRay = new Ray(transform.position + Vector3.up * 1.5f, attackDirection);
+    RaycastHit hit;
+    float attackRange = 50f; // Maximum attack range
+
+    if (Physics.Raycast(attackRay, out hit, attackRange, attackLayers))
+    {
+        Debug.Log($"Enemy raycast hit: {hit.collider.name}");
+        
+        // Check if we hit the player
+        if (hit.collider.CompareTag("Player"))
+        {
+            Debug.Log($"Player hit for {attackDamage} damage!");
+            
+            // Try to get Target component and deal damage
+            var playerTarget = hit.collider.GetComponent<Target>();
+            if (playerTarget != null)
+            {
+                playerTarget.TakeDamage(attackDamage);
+                Debug.Log($"Successfully dealt {attackDamage} damage to player!");
+            }
+            else
+            {
+                Debug.LogWarning("Player hit but no Target component found!");
+            }
+        }
+        
+        // Visual feedback - you can add muzzle flash, bullet trail, etc.
+        Debug.DrawRay(attackRay.origin, attackDirection * hit.distance, Color.red, 1f);
+    }
+    else
+    {
+        // Shot went into the void
+        Debug.DrawRay(attackRay.origin, attackDirection * attackRange, Color.yellow, 1f);
+        Debug.Log("Enemy shot missed completely!");
     }
   }
   
