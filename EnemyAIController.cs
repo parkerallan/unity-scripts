@@ -3,6 +3,10 @@ using UnityEngine.AI;
 
 public class EnemyAIController : MonoBehaviour
 {
+  [Header("Animation")]
+  public Animator enemyAnimator;
+
+  [Header("AI Components")]
   public NavMeshAgent agent;
   public Transform player;
   public LayerMask whatIsGround, whatIsPlayer;
@@ -11,6 +15,13 @@ public class EnemyAIController : MonoBehaviour
   public Vector3 walkPoint;
   bool walkPointSet;
   public float walkPointRange;
+  
+  [Header("Patrol Behavior")]
+  public float patrolWaitTime = 2f; // Time to wait at each patrol point
+  public float patrolSpeed = 1.5f; // Speed when patrolling (slower than chase speed)
+  private float patrolWaitTimer = 0f;
+  private bool isWaitingAtPatrolPoint = false;
+  private float originalAgentSpeed;
 
   // Attacking
   public float timeBetweenAttacks;
@@ -20,7 +31,8 @@ public class EnemyAIController : MonoBehaviour
   public LayerMask attackLayers = -1; // What the raycast can hit
   
   [Header("Attack Effects")]
-  public AudioSource attackSFX; // Optional sound effect when attacking
+  public AudioClip attackSFXClip; // Audio clip for attack sound
+  public float attackSFXVolume = 1f; // Volume for attack sound
   public ParticleSystem muzzleFlash; // Optional particle effect at attack origin
   public ParticleSystem casingEffect; // Optional particle effect for bullet casing ejection
 
@@ -37,6 +49,16 @@ public class EnemyAIController : MonoBehaviour
   {
     player = GameObject.Find("CharModel1").transform;
     agent = GetComponent<NavMeshAgent>();
+    
+    // Store original agent speed for restoration
+    if (agent != null)
+    {
+        originalAgentSpeed = agent.speed;
+    }
+    
+    // Auto-assign animator if not manually set
+    if (enemyAnimator == null)
+        enemyAnimator = GetComponent<Animator>();
   }
 
   private void Update()
@@ -56,17 +78,17 @@ public class EnemyAIController : MonoBehaviour
         }
     }
 
-    // State machine logic - priority order matters!
-    // If alerted, always try to chase/attack player regardless of sight range
-    if (playerInAttackRange && (playerInSightRange || isAlerted)) 
+    // State machine logic - simplified to prevent freezing
+    // If in attack range, always attack (regardless of sight - they're close enough!)
+    if (playerInAttackRange)
     {
         AttackPlayer();
     }
-    else if ((playerInSightRange || isAlerted) && !playerInAttackRange) 
+    else if (playerInSightRange || isAlerted)
     {
         ChasePlayer();
     }
-    else if (!playerInSightRange && !playerInAttackRange && !isAlerted) 
+    else
     {
         Patroling();
     }
@@ -86,25 +108,86 @@ public class EnemyAIController : MonoBehaviour
 
   private void Patroling()
   {
+    // Set patrol speed (slower than normal)
+    if (agent.speed != patrolSpeed)
+    {
+        agent.speed = patrolSpeed;
+    }
+    
     if (!walkPointSet) SearchWalkPoint();
 
     if (walkPointSet)
     {
-      agent.SetDestination(walkPoint);
+      // Check if we're waiting at the patrol point
+      if (isWaitingAtPatrolPoint)
+      {
+          patrolWaitTimer -= Time.deltaTime;
+          
+          // Stop moving while waiting
+          if (agent.isOnNavMesh && agent.enabled)
+          {
+              agent.SetDestination(transform.position);
+          }
+          
+          // Set idle animation while waiting
+          if (enemyAnimator != null)
+          {
+              enemyAnimator.SetBool("isWalking", false);
+              enemyAnimator.SetBool("isRunning", false);
+              enemyAnimator.SetBool("isShooting", false);
+          }
+          
+          if (patrolWaitTimer <= 0f)
+          {
+              isWaitingAtPatrolPoint = false;
+              walkPointSet = false; // Find a new patrol point
+          }
+      }
+      else
+      {
+          agent.SetDestination(walkPoint);
+          
+          Vector3 distanceToWalkPoint = transform.position - walkPoint;
 
-      Vector3 distanceToWalkPoint = transform.position - walkPoint;
-
-      // Walkpoint reached
-      if (distanceToWalkPoint.magnitude < 1f)
-        walkPointSet = false;
+          // Walkpoint reached - start waiting
+          if (distanceToWalkPoint.magnitude < 1f)
+          {
+              isWaitingAtPatrolPoint = true;
+              patrolWaitTimer = patrolWaitTime;
+          }
+          else
+          {
+              // Set walking animation while moving to patrol point
+              if (enemyAnimator != null)
+              {
+                  enemyAnimator.SetBool("isWalking", true);
+                  enemyAnimator.SetBool("isRunning", false);
+                  enemyAnimator.SetBool("isShooting", false);
+              }
+          }
+      }
     }
   }
 
   private void ChasePlayer()
   {
+    // Restore original speed for chasing (faster than patrol)
+    if (agent.speed != originalAgentSpeed)
+    {
+        agent.speed = originalAgentSpeed;
+    }
+    
     if (player != null && agent.isOnNavMesh && agent.enabled)
     {
         agent.SetDestination(player.position);
+    }
+    
+    // Set running animation when chasing
+    if (enemyAnimator != null)
+    {
+        enemyAnimator.SetBool("isWalking", false);
+        enemyAnimator.SetBool("isRunning", true);
+        enemyAnimator.SetBool("isShooting", false);
     }
   }
 
@@ -120,6 +203,14 @@ public class EnemyAIController : MonoBehaviour
         transform.LookAt(player);
     }
 
+    // Set shooting animation
+    if (enemyAnimator != null)
+    {
+        enemyAnimator.SetBool("isWalking", false);
+        enemyAnimator.SetBool("isRunning", false);
+        enemyAnimator.SetBool("isShooting", true);
+    }
+
     if (!alreadyAttacked)
     {
         PerformRaycastAttack();
@@ -133,10 +224,10 @@ public class EnemyAIController : MonoBehaviour
   {
     if (player == null) return;
 
-    // Play attack sound effect
-    if (attackSFX != null)
+    // Play attack sound effect using SFXManager
+    if (attackSFXClip != null && SFXManager.instance != null)
     {
-        attackSFX.Play();
+        SFXManager.instance.PlaySFXClip(attackSFXClip, transform, attackSFXVolume);
     }
     
     // Play muzzle flash effect
@@ -160,14 +251,18 @@ public class EnemyAIController : MonoBehaviour
     
     if (hitRoll <= attackAccuracy)
     {
-        // Accurate shot - small random deviation
+        // Accurate shot - aim directly at player with minimal deviation
+        // Scale deviation based on distance - closer targets get even more accurate shots
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        float deviationScale = Mathf.Clamp(distanceToPlayer / 50f, 0.1f, 1f); // Less deviation at closer range
+        
         Vector3 deviation = new Vector3(
-            Random.Range(-0.1f, 0.1f),
-            Random.Range(-0.1f, 0.1f),
-            Random.Range(-0.1f, 0.1f)
+            Random.Range(-0.05f, 0.05f) * deviationScale,
+            Random.Range(-0.05f, 0.05f) * deviationScale,
+            Random.Range(-0.05f, 0.05f) * deviationScale
         );
         attackDirection = (baseDirection + deviation).normalized;
-        Debug.Log("Enemy attack: ACCURATE SHOT!");
+        Debug.Log($"Enemy attack: ACCURATE SHOT! Distance: {distanceToPlayer:F1}m, Deviation Scale: {deviationScale:F2}");
     }
     else
     {
@@ -232,5 +327,33 @@ public class EnemyAIController : MonoBehaviour
     isAlerted = true;
     alertTimer = alertDuration;
     Debug.Log("Enemy hit by player - now alerted and will chase!");
+  }
+  
+  /// <summary>
+  /// Call this method to trigger the death animation
+  /// This can be invoked from Unity events (like from the Target component's OnDeathAnimation event)
+  /// </summary>
+  public void PlayDeathAnimation()
+  {
+    // Stop all AI behavior
+    this.enabled = false;
+    
+    // Stop the NavMeshAgent
+    if (agent != null && agent.enabled)
+    {
+        agent.isStopped = true;
+        agent.enabled = false;
+    }
+    
+    // Stop all movement animations and trigger death
+    if (enemyAnimator != null)
+    {
+        enemyAnimator.SetBool("isWalking", false);
+        enemyAnimator.SetBool("isRunning", false);
+        enemyAnimator.SetBool("isShooting", false);
+        enemyAnimator.SetTrigger("Death");
+    }
+    
+    Debug.Log("Enemy death animation triggered");
   }
 }
