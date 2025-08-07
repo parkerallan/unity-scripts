@@ -29,6 +29,14 @@ public class Target : MonoBehaviour
     public float flashDuration = 0.15f;  // How long the red flash lasts
     public Color flashColor = Color.red;  // The color to flash
     
+    [Header("Blood Splatter Effect")]
+    public GameObject bloodSplatterPrefab; // Blood splatter prefab to spawn on ground
+    public float bloodSplatterLifetime = 10f; // How long blood splatter stays on ground
+    
+    [Header("Ammo Drop")]
+    public GameObject ammoDrop; // Ammo drop prefab to spawn when enemy dies
+    public float ammoDropChance = 0.5f; // Chance to drop ammo (0.0 to 1.0)
+    
     [Header("Death Effects")]
     public bool deathAnimation = false;  // Play death animation from character controller
     public bool vaporize = false;        // Play vaporize particle effect
@@ -173,6 +181,9 @@ public class Target : MonoBehaviour
         {
             StartCoroutine(FlashEffect());
         }
+        
+        // Spawn blood splatter on ground when shot
+        SpawnBloodSplatter();
         
         if (health <= 0f)
         {
@@ -334,19 +345,95 @@ public class Target : MonoBehaviour
         }
     }
     
+    void SpawnBloodSplatter()
+    {
+        // Only spawn blood splatter if prefab is assigned
+        if (bloodSplatterPrefab == null) return;
+        
+        // Cast a ray downward from the target to find the ground
+        RaycastHit hit;
+        Vector3 rayOrigin = transform.position;
+        
+        // Cast ray downward to find ground
+        if (Physics.Raycast(rayOrigin, Vector3.down, out hit, Mathf.Infinity))
+        {
+            // Spawn blood splatter at the hit point on the ground
+            Vector3 splatterPosition = hit.point;
+            
+            // Add a tiny offset above the ground to prevent z-fighting
+            splatterPosition += hit.normal * 0.01f;
+            
+            // Create rotation that makes the plane lie flat on the surface
+            // Use FromToRotation to rotate from the plane's up direction to the surface normal
+            Quaternion splatterRotation = Quaternion.FromToRotation(Vector3.up, hit.normal);
+            
+            // Add some random rotation around the surface normal for variety
+            splatterRotation *= Quaternion.AngleAxis(Random.Range(0, 360), hit.normal);
+            
+            // Instantiate the blood splatter
+            GameObject bloodSplatter = Instantiate(bloodSplatterPrefab, splatterPosition, splatterRotation);
+            
+            // Destroy it after the specified lifetime
+            Destroy(bloodSplatter, bloodSplatterLifetime);
+            
+            Debug.Log($"Blood splatter spawned at {splatterPosition} for target {gameObject.name}");
+        }
+        else
+        {
+            Debug.LogWarning($"Could not find ground below target {gameObject.name} for blood splatter");
+        }
+    }
+    
+    void SpawnAmmoDrop()
+    {
+        // Cast a ray downward from the target to find the ground
+        RaycastHit hit;
+        Vector3 rayOrigin = transform.position;
+        
+        // Cast ray downward to find ground
+        if (Physics.Raycast(rayOrigin, Vector3.down, out hit, Mathf.Infinity))
+        {
+            // Spawn ammo drop at the hit point on the ground
+            Vector3 dropPosition = hit.point + Vector3.up * 0.1f; // Slightly above ground
+            
+            // Add random scatter to the drop position
+            Vector3 randomOffset = new Vector3(
+                Random.Range(-1f, 1f), 
+                0, 
+                Random.Range(-1f, 1f)
+            );
+            dropPosition += randomOffset;
+            
+            // Instantiate the ammo drop prefab
+            Instantiate(ammoDrop, dropPosition, Quaternion.identity);
+        }
+    }
+    
+    IEnumerator DelayedAmmoSpawn()
+    {
+        // Wait 2 seconds for death animation to play
+        yield return new WaitForSeconds(2f);
+        
+        // Then spawn the ammo drop
+        SpawnAmmoDrop();
+    }
+    
     void Die()
     {
         // Prevent multiple calls to Die()
         if (isDead) return;
         isDead = true;
         
-        Debug.Log($"Target {gameObject.name} is dying...");
+        // Drop ammo after a delay to let death animation play
+        if (ammoDrop != null && Random.value <= ammoDropChance)
+        {
+            StartCoroutine(DelayedAmmoSpawn());
+        }
         
         // Award points if this is an enemy (only once)
         if (isEnemy && !isPlayer && ScoreManager.Instance != null)
         {
             ScoreManager.Instance.AddScore(pointValue);
-            Debug.Log($"Awarded {pointValue} points for killing {targetName}");
         }
         
         // Hide health bar when dying (only for enemies)
@@ -419,9 +506,26 @@ public class Target : MonoBehaviour
     
     void PlayBloodSpurtEffect()
     {
-        Debug.Log("Playing blood spurt effect");
-        bloodSpurtEffect.transform.position = transform.position;
-        bloodSpurtEffect.Play();
+        // If the particle system is a prefab reference, instantiate it
+        if (bloodSpurtEffect.transform.parent == null || bloodSpurtEffect.transform.parent != transform)
+        {
+            // Create a temporary instance of the particle system
+            GameObject tempEffect = Instantiate(bloodSpurtEffect.gameObject, transform.position, transform.rotation);
+            ParticleSystem tempParticleSystem = tempEffect.GetComponent<ParticleSystem>();
+            
+            // Play the effect
+            tempParticleSystem.Play();
+            
+            // Destroy the temporary effect after it finishes
+            var main = tempParticleSystem.main;
+            Destroy(tempEffect, main.duration + main.startLifetime.constantMax);
+        }
+        else
+        {
+            // If it's already attached as a child, just play it
+            bloodSpurtEffect.transform.position = transform.position;
+            bloodSpurtEffect.Play();
+        }
     }
     
     IEnumerator DestroyAfterDelay()
