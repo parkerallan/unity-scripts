@@ -191,6 +191,58 @@ public class Target : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Restore health to this target. Returns the actual amount healed.
+    /// </summary>
+    public float RestoreHealth(float amount)
+    {
+        // Don't heal if already dead
+        if (isDead) return 0f;
+        
+        float oldHealth = health;
+        health = Mathf.Min(health + amount, maxHealth);
+        float actualHealAmount = health - oldHealth;
+        
+        Debug.Log($"Target {gameObject.name}: Health restored from {oldHealth} to {health} (+{actualHealAmount})");
+        
+        // Update health bar for any target type
+        UpdateHealthBar();
+        
+        // Show health bar briefly for enemies when healed
+        if (!isPlayer)
+        {
+            ShowHealthBar();
+        }
+        
+        return actualHealAmount;
+    }
+    
+    /// <summary>
+    /// Fully restore health to maximum. Returns the actual amount healed.
+    /// </summary>
+    public float FullHeal()
+    {
+        // Don't heal if already dead
+        if (isDead) return 0f;
+        
+        float oldHealth = health;
+        health = maxHealth;
+        float actualHealAmount = health - oldHealth;
+        
+        Debug.Log($"Target {gameObject.name}: Fully healed from {oldHealth} to {health} (+{actualHealAmount})");
+        
+        // Update health bar for any target type
+        UpdateHealthBar();
+        
+        // Show health bar briefly for enemies when healed
+        if (!isPlayer)
+        {
+            ShowHealthBar();
+        }
+        
+        return actualHealAmount;
+    }
+    
     private void NotifyBossControllerOnHit()
     {
         // Try to find and notify any boss controller on this GameObject

@@ -146,7 +146,7 @@ public class PlayerController : MonoBehaviour
         isDiving = true;
         canMove = false; // Disable normal movement during dive
 
-        Debug.Log("PerformDive started - direction: " + direction);
+        // Debug.Log("PerformDive started - direction: " + direction);
 
         // Store original Rigidbody settings
         bool wasKinematic = _rb.isKinematic;
@@ -188,7 +188,7 @@ public class PlayerController : MonoBehaviour
         // Restore rigidbody settings
         _rb.isKinematic = wasKinematic;
 
-        Debug.Log("PerformDive completed");
+        // Debug.Log("PerformDive completed");
 
         isDiving = false;
         canMove = true; // Re-enable normal movement
@@ -201,7 +201,7 @@ public class PlayerController : MonoBehaviour
         // Check if player is near any trigger that should prevent diving
         if (IsNearDialogueTrigger())
         {
-            Debug.Log("Cannot dive - near dialogue/building trigger!");
+            // Debug.Log("Cannot dive - near dialogue/building trigger!");
             return;
         }
 
@@ -209,21 +209,21 @@ public class PlayerController : MonoBehaviour
         bool hasAmmoForActiveWeapon = (IsGunActive() && HasAmmo()) || (IsRifleActive() && HasRifleAmmo());
         if (!hasAmmoForActiveWeapon)
         {
-            Debug.Log("Cannot dive - no ammo!");
+            // Debug.Log("Cannot dive - no ammo!");
             return;
         }
 
         // Check cooldown
         if (Time.time - lastDiveTime < diveCooldown)
         {
-            Debug.Log("Dive on cooldown - " + (diveCooldown - (Time.time - lastDiveTime)).ToString("F1") + "s remaining");
+            // Debug.Log("Dive on cooldown - " + (diveCooldown - (Time.time - lastDiveTime)).ToString("F1") + "s remaining");
             return;
         }
 
         // Don't start new dive if already diving or movement is disabled
         if (isDiving || currentDiveCoroutine != null || !canMove)
         {
-            Debug.Log("Dive blocked - isDiving: " + isDiving + ", coroutine exists: " + (currentDiveCoroutine != null) + ", canMove: " + canMove);
+            // Debug.Log("Dive blocked - isDiving: " + isDiving + ", coroutine exists: " + (currentDiveCoroutine != null) + ", canMove: " + canMove);
             return;
         }
 
@@ -234,7 +234,7 @@ public class PlayerController : MonoBehaviour
             currentDiveCoroutine = null;
         }
 
-        Debug.Log("Starting dive - Left: " + isLeft + ", Position: " + transform.position);
+        // Debug.Log("Starting dive - Left: " + isLeft + ", Position: " + transform.position);
 
         // Calculate dive direction based on player's facing direction
         Vector3 diveDirection;
@@ -296,7 +296,7 @@ public class PlayerController : MonoBehaviour
         // Remove the old fire mode toggle - weapons handle their own fire modes now
         // if (Input.GetKeyDown(KeyCode.F)) {
         //     _fireMode = (_fireMode == FireMode.Single) ? FireMode.Burst : FireMode.Single;
-        //     //Debug.Log("Fire mode set to: " + _fireMode);
+        //     //// Debug.Log("Fire mode set to: " + _fireMode);
         // }
 
         // Set combat mode if right mouse button is held down and not near dialogue trigger
@@ -322,7 +322,7 @@ public class PlayerController : MonoBehaviour
 
             if (Input.GetKeyDown(KeyCode.Q))
             {
-                Debug.Log("Q key pressed - diving left");
+                // Debug.Log("Q key pressed - diving left");
                 // Check if player has ammo before allowing dive animation
                 if (hasAmmoForActiveWeapon)
                 {
@@ -339,12 +339,12 @@ public class PlayerController : MonoBehaviour
                 }
                 else
                 {
-                    Debug.Log("Cannot dive - no ammo! Animation blocked.");
+                    // Debug.Log("Cannot dive - no ammo! Animation blocked.");
                 }
             }
             else if (Input.GetKeyDown(KeyCode.E))
             {
-                Debug.Log("E key pressed - diving right");
+                // Debug.Log("E key pressed - diving right");
                 // Check if player has ammo before allowing dive animation
                 if (hasAmmoForActiveWeapon)
                 {
@@ -361,7 +361,7 @@ public class PlayerController : MonoBehaviour
                 }
                 else
                 {
-                    Debug.Log("Cannot dive - no ammo! Animation blocked.");
+                    // Debug.Log("Cannot dive - no ammo! Animation blocked.");
                 }
             }
             else
@@ -385,13 +385,13 @@ public class PlayerController : MonoBehaviour
                         {
                             animator.SetBool("isFiring", true);
                             animator.SetBool("isFiringRifle", false);
-                            Debug.Log("Gun single fire animation triggered");
+                            // Debug.Log("Gun single fire animation triggered");
                         }
                         else if (IsRifleActive())
                         {
                             animator.SetBool("isFiring", false);
                             animator.SetBool("isFiringRifle", true);
-                            Debug.Log("Rifle single fire animation triggered");
+                            // Debug.Log("Rifle single fire animation triggered");
                         }
                     }
                     if (Input.GetKeyUp(KeyCode.Mouse0))
@@ -410,13 +410,13 @@ public class PlayerController : MonoBehaviour
                         {
                             animator.SetBool("isFiringAuto", true);
                             animator.SetBool("isFiringRifle", false);
-                            Debug.Log("Gun burst fire animation triggered");
+                            // Debug.Log("Gun burst fire animation triggered");
                         }
                         else if (IsRifleActive())
                         {
                             animator.SetBool("isFiringAuto", false);
                             animator.SetBool("isFiringRifle", true);
-                            Debug.Log("Rifle auto fire animation triggered (using isFiringRifle)");
+                            // Debug.Log("Rifle auto fire animation triggered (using isFiringRifle)");
                         }
                     }
                     if (Input.GetKeyUp(KeyCode.Mouse0) || !hasAmmoForActiveWeapon)
@@ -429,7 +429,7 @@ public class PlayerController : MonoBehaviour
                 // Only show out of ammo message when trying to fire with no ammo
                 if (!hasAmmoForActiveWeapon && Input.GetKeyDown(KeyCode.Mouse0))
                 {
-                    Debug.Log("Out of ammo! Press R to reload.");
+                    // Debug.Log("Out of ammo! Press R to reload.");
                 }
             }
             else
@@ -499,7 +499,7 @@ public class PlayerController : MonoBehaviour
             if (IsRifleActive())
             {
                 animator.SetBool("isMovingWRifle", true);
-                Debug.Log("Setting isWalking=true while rifle is active and aiming: " + Input.GetKey(KeyCode.Mouse1));
+                // Debug.Log("Setting isWalking=true while rifle is active and aiming: " + Input.GetKey(KeyCode.Mouse1));
             }
             else
             {
@@ -526,7 +526,7 @@ public class PlayerController : MonoBehaviour
                 if (IsRifleActive())
                 {
                     animator.SetBool("isMovingWRifle", true);
-                    Debug.Log("Setting isRunning=true while rifle is active and aiming: " + Input.GetKey(KeyCode.Mouse1));
+                    // Debug.Log("Setting isRunning=true while rifle is active and aiming: " + Input.GetKey(KeyCode.Mouse1));
                 }
                 else
                 {
@@ -538,7 +538,7 @@ public class PlayerController : MonoBehaviour
 
                 if (Input.GetKeyDown(KeyCode.Q))
                 {
-                    Debug.Log("Q key pressed while running - diving left");
+                    // Debug.Log("Q key pressed while running - diving left");
                     // Check if player has ammo before allowing dive animation
                     if (hasAmmoForRunningWeapon)
                     {
@@ -555,7 +555,7 @@ public class PlayerController : MonoBehaviour
                     }
                     else
                     {
-                        Debug.Log("Cannot dive while running - no ammo! Animation blocked.");
+                        // Debug.Log("Cannot dive while running - no ammo! Animation blocked.");
                     }
                 }
                 else
@@ -565,7 +565,7 @@ public class PlayerController : MonoBehaviour
                 }
                 if (Input.GetKeyDown(KeyCode.E))
                 {
-                    Debug.Log("E key pressed while running - diving right");
+                    // Debug.Log("E key pressed while running - diving right");
                     // Check if player has ammo before allowing dive animation
                     if (hasAmmoForRunningWeapon)
                     {
@@ -582,7 +582,7 @@ public class PlayerController : MonoBehaviour
                     }
                     else
                     {
-                        Debug.Log("Cannot dive while running - no ammo! Animation blocked.");
+                        // Debug.Log("Cannot dive while running - no ammo! Animation blocked.");
                     }
                 }
                 else
@@ -701,7 +701,7 @@ public class PlayerController : MonoBehaviour
                 {
                     // Check if we're in the second half of the dive (falling down)
                     // This prevents stopping the dive too early during the upward arc
-                    Debug.Log("Ground contact during dive - considering stopping dive");
+                    // Debug.Log("Ground contact during dive - considering stopping dive");
                     // We could add additional logic here to check dive progress if needed
                 }
 
@@ -740,6 +740,6 @@ public class PlayerController : MonoBehaviour
     {
         animator.SetTrigger("Death");
         canMove = false; // Disable movement during death animation
-        Debug.Log("Death animation triggered");
+        // Debug.Log("Death animation triggered");
     }
 }
