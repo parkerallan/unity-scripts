@@ -23,23 +23,25 @@ public class oneBController : MonoBehaviour
     public float attackDamage = 35f; // Boss damage
     public LayerMask attackLayers = -1;
 
-    [Header("Boss Phases")]
-    public bool useHealthPhases = true;
-    public float phase2HealthThreshold = 0.6f; // 60% health
-    public float phase3HealthThreshold = 0.3f; // 30% health
-    public float phase2AttackSpeedMultiplier = 1.3f;
-    public float phase3AttackSpeedMultiplier = 1.6f;
-    public float phase2AccuracyBonus = 0.05f;
-    public float phase3AccuracyBonus = 0.1f;
-
     [Header("Movement")]
     public float sightRange = 25f; // Larger sight range
-    public float attackRange = 15f; // Longer attack range
+    public float attackRange = 3f; // Close range for kick attacks
+    public float walkRange = 8f; // Range where enemy walks instead of runs
     public float circleStrafingRadius = 10f;
     public float strafingSpeed = 2f;
     public bool enableCircleStrafing = true;
     public float minCircleTime = 2f;
     public float maxCircleTime = 5f;
+
+    [Header("Water Combat Settings")]
+    public float waterAttackRange = 50f; // Very large range to start attacks very early for animation sync
+    public float waterDamageRange = 20f; // Actual damage range - smaller than attack initiation range
+    public float waterMinDistance = 10f; // Minimum distance to maintain when in water
+    public float waterCircleRadius = 12f; // Circle radius when in water
+    public bool disableRushInWater = true; // Prevent rushing when using ranged weapon
+    public float waterAttackAccuracy = 0.92f; // Higher accuracy for water attacks to compensate for distance
+    public float waterAccurateDeviation = 0.02f; // Smaller deviation for accurate water shots
+    public float waterMissDeviation = 0.15f; // Reduced miss deviation for water attacks
 
     [Header("Aggression System")]
     public float maxAggression = 100f;
@@ -53,21 +55,22 @@ public class oneBController : MonoBehaviour
 
     [Header("Water Surfing System")]
     public GameObject surfboard; // Surfboard GameObject to enable/disable
+    public GameObject waterWeapon; // Weapon GameObject to enable/disable when in water
+    public GameObject waterProjectile; // Projectile to instantiate when attacking in water
+    public Transform projectileSpawnPoint; // Where to spawn projectiles (can be weapon muzzle)
+    public ParticleSystem surfingWaterEffect; // Particle effect to play under surfboard while surfing
     public LayerMask waterLayer; // Layer to detect water contact
     public float waterCheckRadius = 1f; // Radius for water detection
     public float surfingSpeed = 8f; // Speed when surfing on water
     public bool enableWaterSurfing = true;
 
     [Header("Attack Effects")]
-    public AudioSource attackSFX;
-    public ParticleSystem muzzleFlash;
-    public ParticleSystem casingEffect;
+    public AudioClip attackSFXClip;
+    public float attackSFXVolume = 1f;
 
     [Header("Boss Specific Effects")]
     public AudioSource battleMusicTrigger;
     public ParticleSystem intimidationEffect; // Plays when boss activates
-    public AudioClip activationSound;
-    public AudioClip phaseChangeSound;
 
     [Header("One-B Specific Animations")]
     public bool useRandomAttackAnimations = true;
@@ -75,12 +78,18 @@ public class oneBController : MonoBehaviour
 
     // Private variables
     private bool alreadyAttacked;
+    private bool animationTriggered; // Track if attack animation has been triggered
     private float currentAggression = 0f;
-    private int currentPhase = 1;
     private Target bossTarget;
     private float originalTimeBetweenAttacks;
     private float originalAttackAccuracy;
-    private bool playerInSightRange, playerInAttackRange;
+    
+    // Attack cooldown timers
+    private float lastKickTime = 0f;
+    private float lastThrowTime = 0f;
+    private float kickCooldown = 4f; // Longer cooldown for kick attacks
+    private float throwCooldown = 3f; // Longer cooldown for throw attacks
+    private bool playerInSightRange, playerInAttackRange, playerInWalkRange;
     private bool isRushing = false;
     private float rushStartTime = 0f;
     private float strafingAngle = 0f;
@@ -92,7 +101,10 @@ public class oneBController : MonoBehaviour
 
     // Water surfing state variables
     private bool isOnWater = false;
-    private bool isSurfing = false;
+    private bool surfingDirection = true; // true = surfing forward, false = circling back
+    private float surfingChangeTime = 0f;
+    private float surfingChangeInterval = 8f; // Surf for 8 seconds before turning around
+    private float surfingDistance = 40f; // How far to surf past the player
 
     private void Start()
     {
@@ -124,6 +136,19 @@ public class oneBController : MonoBehaviour
         {
             surfboard.SetActive(false);
         }
+
+        // Ensure water weapon starts disabled
+        if (waterWeapon != null)
+        {
+            waterWeapon.SetActive(false);
+        }
+
+        // Ensure surfing water effect starts stopped
+        if (surfingWaterEffect != null)
+        {
+            surfingWaterEffect.Stop();
+            surfingWaterEffect.gameObject.SetActive(false);
+        }
     }
 
     private void Update()
@@ -141,7 +166,6 @@ public class oneBController : MonoBehaviour
         UpdateWaterDetection();
         UpdateRangeChecks();
         UpdateAggression();
-        UpdatePhases();
         UpdateBehavior();
     }
 
@@ -168,12 +192,26 @@ public class oneBController : MonoBehaviour
     private void EnterWaterMode()
     {
         Debug.Log($"{bossName} entering water surfing mode!");
-        isSurfing = true;
 
         // Enable surfboard
         if (surfboard != null)
         {
             surfboard.SetActive(true);
+        }
+
+        // Enable water weapon
+        if (waterWeapon != null)
+        {
+            waterWeapon.SetActive(true);
+            Debug.Log($"{bossName} water weapon enabled!");
+        }
+
+        // Start surfing water particle effect
+        if (surfingWaterEffect != null)
+        {
+            surfingWaterEffect.gameObject.SetActive(true);
+            surfingWaterEffect.Play();
+            Debug.Log($"{bossName} surfing water effect started!");
         }
 
         // Adjust agent settings for water movement
@@ -185,19 +223,33 @@ public class oneBController : MonoBehaviour
         // Trigger surfing animation state
         if (bossAnimator != null)
         {
-            bossAnimator.SetBool("isSurfing", true);
+            bossAnimator.SetBool("isOnBoard", true);
         }
     }
 
     private void ExitWaterMode()
     {
         Debug.Log($"{bossName} exiting water surfing mode!");
-        isSurfing = false;
 
         // Disable surfboard
         if (surfboard != null)
         {
             surfboard.SetActive(false);
+        }
+
+        // Disable water weapon
+        if (waterWeapon != null)
+        {
+            waterWeapon.SetActive(false);
+            Debug.Log($"{bossName} water weapon disabled!");
+        }
+
+        // Stop surfing water particle effect
+        if (surfingWaterEffect != null)
+        {
+            surfingWaterEffect.Stop();
+            surfingWaterEffect.gameObject.SetActive(false);
+            Debug.Log($"{bossName} surfing water effect stopped!");
         }
 
         // Reset agent settings for ground movement
@@ -209,7 +261,7 @@ public class oneBController : MonoBehaviour
         // Exit surfing animation state
         if (bossAnimator != null)
         {
-            bossAnimator.SetBool("isSurfing", false);
+            bossAnimator.SetBool("isOnBoard", false);
         }
     }
 
@@ -219,9 +271,14 @@ public class oneBController : MonoBehaviour
 
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         
+        // Use different ranges based on water state
+        float currentAttackRange = isOnWater ? waterAttackRange : attackRange;
+        float currentWalkRange = isOnWater ? waterMinDistance : walkRange;
+        
         // Use distance-based detection for more reliable detection
         playerInSightRange = distanceToPlayer <= sightRange;
-        playerInAttackRange = distanceToPlayer <= attackRange;
+        playerInAttackRange = distanceToPlayer <= currentAttackRange;
+        playerInWalkRange = distanceToPlayer <= currentWalkRange;
         
         // Track if player is moving or stationary
         if (Vector3.Distance(player.position, lastPlayerPosition) < 0.5f)
@@ -252,50 +309,6 @@ public class oneBController : MonoBehaviour
         }
     }
 
-    private void UpdatePhases()
-    {
-        if (!useHealthPhases || bossTarget == null) return;
-
-        float healthPercentage = bossTarget.health / bossTarget.maxHealth;
-        int newPhase = 1;
-
-        if (healthPercentage <= phase3HealthThreshold)
-            newPhase = 3;
-        else if (healthPercentage <= phase2HealthThreshold)
-            newPhase = 2;
-
-        if (newPhase != currentPhase)
-        {
-            currentPhase = newPhase;
-            OnPhaseChange();
-        }
-    }
-
-    private void OnPhaseChange()
-    {
-        // Play phase change sound
-        if (phaseChangeSound != null && attackSFX != null)
-        {
-            attackSFX.PlayOneShot(phaseChangeSound);
-        }
-
-        // Adjust stats based on phase
-        switch (currentPhase)
-        {
-            case 2:
-                timeBetweenAttacks = originalTimeBetweenAttacks / phase2AttackSpeedMultiplier;
-                attackAccuracy = Mathf.Min(1f, originalAttackAccuracy + phase2AccuracyBonus);
-                break;
-            case 3:
-                timeBetweenAttacks = originalTimeBetweenAttacks / phase3AttackSpeedMultiplier;
-                attackAccuracy = Mathf.Min(1f, originalAttackAccuracy + phase3AccuracyBonus);
-                break;
-        }
-
-        // Add aggression when phase changes
-        AddAggression(35f);
-    }
-
     private void UpdateBehavior()
     {
         if (playerInSightRange)
@@ -308,11 +321,12 @@ public class oneBController : MonoBehaviour
                 circlingTime += Time.deltaTime;
             }
             
-            // Check if we should randomly decide to rush
+            // Check if we should randomly decide to rush (disabled in water if using ranged weapon)
             bool canRush = Time.time - lastRushTime >= rushCooldown && 
                           currentAggression >= aggressionThresholdForRush &&
                           !playerInAttackRange &&
-                          !isRushing;
+                          !isRushing &&
+                          !(isOnWater && disableRushInWater); // No rushing in water with ranged weapon
             
             // Random rush decision
             if (canRush && Random.Range(0f, 1f) < rushChance * Time.deltaTime)
@@ -324,8 +338,8 @@ public class oneBController : MonoBehaviour
                 circlingTime = 0f;
             }
             
-            // Also trigger rush if circled too long
-            if (circlingTime >= maxCircleTime)
+            // Also trigger rush if circled too long (but not in water with ranged weapon)
+            if (circlingTime >= maxCircleTime && !(isOnWater && disableRushInWater))
             {
                 isRushing = true;
                 rushStartTime = Time.time;
@@ -342,21 +356,12 @@ public class oneBController : MonoBehaviour
                 circlingTime = 0f;
             }
             
-            // Decision making for behavior
-            if (playerInAttackRange && !alreadyAttacked)
+            // Decision making for behavior - different logic for water vs land
+            if (isOnWater)
             {
-                AttackPlayer();
-                isCircling = false;
-                circlingTime = 0f;
-            }
-            else if (isRushing)
-            {
-                RushPlayer();
-            }
-            else if (enableCircleStrafing && !playerInAttackRange)
-            {
+                // Water behavior: continuous surfing runs with attacks during passes
                 StopRunningAnimation();
-                CircleStrafing();
+                SurfingMovement();
                 if (!isCircling)
                 {
                     isCircling = true;
@@ -365,30 +370,174 @@ public class oneBController : MonoBehaviour
             }
             else
             {
-                StopRunningAnimation();
-                ChasePlayer();
-                isCircling = false;
-                circlingTime = 0f;
+                // Land behavior: simple chase and attack, no strafing
+                if (playerInAttackRange && !alreadyAttacked)
+                {
+                    // Only attack if very close (within attack range)
+                    AttackPlayer();
+                    isCircling = false;
+                    circlingTime = 0f;
+                }
+                else if (isRushing)
+                {
+                    RushPlayer();
+                }
+                else
+                {
+                    // Simple chase behavior - no strafing on land
+                    StopRunningAnimation();
+                    ChasePlayer();
+                    isCircling = false;
+                    circlingTime = 0f;
+                }
             }
         }
         else
         {
-            PlayIdleAnimation();
-            StopWalkAnimation();
-            StopRunningAnimation();
-            isRushing = false;
-            isCircling = false;
-            circlingTime = 0f;
+            // Out of sight range - different behavior for water vs land
+            if (isOnWater)
+            {
+                // Continue surfing even when player is out of sight range
+                StopRunningAnimation();
+                SurfingMovement();
+                if (!isCircling)
+                {
+                    isCircling = true;
+                    circlingTime = 0f;
+                }
+            }
+            else
+            {
+                // On land: go idle when out of range
+                PlayIdleAnimation();
+                StopWalkAnimation();
+                StopRunningAnimation();
+                isRushing = false;
+                isCircling = false;
+                circlingTime = 0f;
+            }
         }
+    }
+
+    private void MaintainDistance()
+    {
+        if (player == null || !agent.isOnNavMesh || !agent.enabled) return;
+
+        // Calculate direction away from player
+        Vector3 directionAwayFromPlayer = (transform.position - player.position).normalized;
+        
+        // Find a position that maintains the minimum water distance
+        Vector3 targetPosition = player.position + directionAwayFromPlayer * waterMinDistance;
+        
+        // Ensure the target position is accessible
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(targetPosition, out hit, 8f, NavMesh.AllAreas))
+        {
+            targetPosition = hit.position;
+        }
+        
+        // Move away while maintaining water speed
+        agent.speed = surfingSpeed;
+        agent.updateRotation = false;
+        agent.SetDestination(targetPosition);
+        
+        // Face the player while backing away
+        Vector3 lookDirection = (player.position - transform.position).normalized;
+        lookDirection.y = 0;
+        if (lookDirection != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(lookDirection);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
+        }
+        
+        // Play surfing animation
+        PlaySurfingAnimation();
+    }
+
+    private void SurfingMovement()
+    {
+        if (player == null || !agent.isOnNavMesh || !agent.enabled) return;
+
+        // Update surfing direction change timer
+        surfingChangeTime += Time.deltaTime;
+        if (surfingChangeTime >= surfingChangeInterval)
+        {
+            surfingDirection = !surfingDirection; // Switch surfing directions
+            surfingChangeTime = 0f;
+        }
+
+        // Create very long surf runs that go far past the player
+        Vector3 perpDirection = Vector3.Cross(Vector3.forward, Vector3.up).normalized;
+        
+        // Start point is very far to one side of the player
+        Vector3 startSide = player.position + (surfingDirection ? -perpDirection : perpDirection) * (surfingDistance * 1.5f);
+        // End point is very far to the other side of the player  
+        Vector3 endSide = player.position + (surfingDirection ? perpDirection : -perpDirection) * (surfingDistance * 1.5f);
+        
+        // Always surf toward the end point (making a long run past the player)
+        Vector3 targetPosition = endSide;
+        
+        // Ensure the target position is accessible
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(targetPosition, out hit, 50f, NavMesh.AllAreas))
+        {
+            targetPosition = hit.position;
+        }
+        
+        // Very high speed for long surf runs - never stop moving
+        agent.speed = surfingSpeed * 3f;
+        agent.updateRotation = false;
+        agent.SetDestination(targetPosition);
+        agent.isStopped = false; // Force continuous movement
+        
+        // Always face the direction of the surf run
+        Vector3 lookDirection = (targetPosition - transform.position).normalized;
+        lookDirection.y = 0;
+        if (lookDirection != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(lookDirection);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 12f);
+        }
+        
+        // Check distance for animation trigger (early) and damage (later)
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        
+        // Trigger attack animation when farther away
+        if (distanceToPlayer <= waterAttackRange && !animationTriggered && !alreadyAttacked && Time.time - lastThrowTime >= throwCooldown)
+        {
+            // Trigger animation early when in larger range
+            if (bossAnimator != null)
+            {
+                bossAnimator.SetTrigger("Throw");
+            }
+            animationTriggered = true;
+        }
+        
+        // Apply damage when closer (animation should be playing/finishing)
+        if (distanceToPlayer <= waterDamageRange && animationTriggered && !alreadyAttacked)
+        {
+            // Apply damage after animation has had time to play
+            PerformRaycastAttack();
+            alreadyAttacked = true;
+            animationTriggered = false;
+            lastThrowTime = Time.time; // Set throw cooldown
+            Invoke(nameof(ResetAttack), timeBetweenAttacks);
+        }
+        
+        // Play surfing animation
+        PlaySurfingAnimation();
     }
 
     private void CircleStrafing()
     {
         if (player == null || !agent.isOnNavMesh || !agent.enabled) return;
 
+        // Use different circle radius based on water state
+        float currentCircleRadius = isOnWater ? waterCircleRadius : circleStrafingRadius;
+
         // Adjust strafing behavior based on surfing state
         float strafingRotationSpeed = 0.8f * Time.deltaTime;
-        if (isSurfing)
+        if (isOnWater)
         {
             strafingRotationSpeed *= 1.3f; // Faster rotation when surfing
         }
@@ -396,9 +545,9 @@ public class oneBController : MonoBehaviour
         strafingAngle += strafingRotationSpeed;
         
         Vector3 offset = new Vector3(
-            Mathf.Sin(strafingAngle) * circleStrafingRadius,
+            Mathf.Sin(strafingAngle) * currentCircleRadius,
             0,
-            Mathf.Cos(strafingAngle) * circleStrafingRadius
+            Mathf.Cos(strafingAngle) * currentCircleRadius
         );
         
         Vector3 targetPosition = player.position + offset;
@@ -410,8 +559,18 @@ public class oneBController : MonoBehaviour
             targetPosition = hit.position;
         }
         
-        // Use appropriate speed based on state
-        float currentSpeed = isSurfing ? surfingSpeed : 5f;
+        // Use appropriate speed based on state and distance
+        float currentSpeed;
+        if (isOnWater)
+        {
+            currentSpeed = surfingSpeed;
+        }
+        else
+        {
+            // On land: Always use run speed for faster movement
+            currentSpeed = 5.5f; // Consistent running speed
+        }
+        
         agent.speed = currentSpeed;
         agent.updateRotation = false;
         agent.SetDestination(targetPosition);
@@ -426,13 +585,14 @@ public class oneBController : MonoBehaviour
         }
 
         // Play appropriate movement animation
-        if (isSurfing)
+        if (isOnWater)
         {
             PlaySurfingAnimation();
         }
         else
         {
-            PlayWalkAnimation();
+            // On land: Always run for faster strafing
+            PlayRunAnimation();
         }
     }
 
@@ -441,7 +601,7 @@ public class oneBController : MonoBehaviour
         if (player == null || !agent.isOnNavMesh || !agent.enabled) return;
 
         // Rush with appropriate speed based on state
-        float currentRushSpeed = isSurfing ? surfingSpeed * 1.5f : rushSpeed;
+        float currentRushSpeed = isOnWater ? surfingSpeed * 1.5f : rushSpeed;
         agent.speed = currentRushSpeed;
         agent.updateRotation = false;
         
@@ -459,14 +619,16 @@ public class oneBController : MonoBehaviour
         // Play appropriate rush animation
         if (bossAnimator != null)
         {
-            if (isSurfing)
+            if (isOnWater)
             {
-                bossAnimator.SetBool("isSurfing", true);
+                bossAnimator.SetBool("isOnBoard", true);
+                bossAnimator.SetBool("isRunning", false);
                 // Surfing rush uses same surfing animation but faster
             }
             else
             {
                 bossAnimator.SetBool("isRunning", true);
+                bossAnimator.SetBool("isOnBoard", false);
             }
         }
         
@@ -474,9 +636,9 @@ public class oneBController : MonoBehaviour
         if (!isRushing && bossAnimator != null)
         {
             bossAnimator.SetBool("isRunning", false);
-            if (isSurfing)
+            if (isOnWater)
             {
-                bossAnimator.SetBool("isSurfing", true);
+                bossAnimator.SetBool("isOnBoard", true);
             }
         }
     }
@@ -504,15 +666,16 @@ public class oneBController : MonoBehaviour
         }
         
         // Use appropriate speed and animation based on state
-        if (isSurfing)
+        if (isOnWater)
         {
             agent.speed = surfingSpeed;
             PlaySurfingAnimation();
         }
         else
         {
-            agent.speed = 4.5f;
-            PlayWalkAnimation();
+            // On land: Always run for faster chase
+            agent.speed = 5.5f; // Faster running speed for chase
+            PlayRunAnimation();
         }
         
         agent.updateRotation = false;
@@ -530,6 +693,10 @@ public class oneBController : MonoBehaviour
 
     private void AttackPlayer()
     {
+        // Check cooldowns before attacking
+        if (isOnWater && Time.time - lastThrowTime < throwCooldown) return;
+        if (!isOnWater && Time.time - lastKickTime < kickCooldown) return;
+        
         // Stop moving immediately
         if (agent.isOnNavMesh && agent.enabled)
         {
@@ -549,29 +716,17 @@ public class oneBController : MonoBehaviour
         // Use different attacks based on state
         if (bossAnimator != null)
         {
-            if (isSurfing)
+            if (isOnWater)
             {
                 // Water attacks - use "Throw" animation
                 bossAnimator.SetTrigger("Throw");
+                lastThrowTime = Time.time;
             }
             else
             {
-                // Ground attacks - use random ground attack animations
-                if (isRushing)
-                {
-                    bossAnimator.SetTrigger("Slash2");
-                    isRushing = false;
-                    bossAnimator.SetBool("isRunning", false);
-                }
-                else if (useRandomAttackAnimations)
-                {
-                    int randomAttack = Random.Range(1, 4);
-                    bossAnimator.SetTrigger($"Slash{randomAttack}");
-                }
-                else
-                {
-                    bossAnimator.SetTrigger("Slash1");
-                }
+                // Ground attacks - use "Kick" trigger
+                bossAnimator.SetTrigger("Kick");
+                lastKickTime = Time.time;
             }
         }
         
@@ -587,50 +742,90 @@ public class oneBController : MonoBehaviour
     {
         if (player == null) return;
 
-        // Play attack sound effect
-        if (attackSFX != null)
+        // Play attack sound effect using SFXManager
+        if (attackSFXClip != null && SFXManager.instance != null)
         {
-            attackSFX.Play();
-        }
-
-        // Play muzzle flash effect (for both water and ground attacks)
-        if (muzzleFlash != null)
-        {
-            muzzleFlash.Play();
-        }
-
-        // Play bullet casing ejection effect
-        if (casingEffect != null)
-        {
-            casingEffect.transform.position = transform.position + Vector3.up * 1.5f + transform.right * 0.3f;
-            casingEffect.Play();
+            SFXManager.instance.PlaySFXClip(attackSFXClip, transform, attackSFXVolume);
         }
 
         // Calculate attack direction with accuracy variation
-        Vector3 baseDirection = (player.position - transform.position).normalized;
-        
-        float hitRoll = Random.Range(0f, 1f);
+        Vector3 targetPosition = player.position;
+        Vector3 baseDirection = (targetPosition - transform.position).normalized;
         Vector3 attackDirection;
 
-        if (hitRoll <= attackAccuracy)
+        if (isOnWater)
         {
-            // Accurate shot with minimal deviation
-            Vector3 deviation = new Vector3(
-                Random.Range(-0.05f, 0.05f),
-                Random.Range(-0.05f, 0.05f),
-                Random.Range(-0.05f, 0.05f)
-            );
-            attackDirection = (baseDirection + deviation).normalized;
+            // Water attacks: almost perfect accuracy, direct targeting
+            attackDirection = baseDirection; // No deviation for water attacks
         }
         else
         {
-            // Miss shot with more deviation
-            Vector3 missDeviation = new Vector3(
-                Random.Range(-0.4f, 0.4f),
-                Random.Range(-0.2f, 0.2f),
-                Random.Range(-0.4f, 0.4f)
-            );
-            attackDirection = (baseDirection + missDeviation).normalized;
+            // Land attacks: use original accuracy system
+            float hitRoll = Random.Range(0f, 1f);
+            if (hitRoll <= attackAccuracy)
+            {
+                // Accurate shot with minimal deviation
+                Vector3 deviation = new Vector3(
+                    Random.Range(-0.05f, 0.05f),
+                    Random.Range(-0.05f, 0.05f),
+                    Random.Range(-0.05f, 0.05f)
+                );
+                attackDirection = (baseDirection + deviation).normalized;
+            }
+            else
+            {
+                // Miss shot with more deviation
+                Vector3 missDeviation = new Vector3(
+                    Random.Range(-0.4f, 0.4f),
+                    Random.Range(-0.2f, 0.2f),
+                    Random.Range(-0.4f, 0.4f)
+                );
+                attackDirection = (baseDirection + missDeviation).normalized;
+            }
+        }
+
+        // Instantiate water projectile if in water
+        if (isOnWater && waterProjectile != null)
+        {
+            // Determine spawn position
+            Vector3 spawnPosition = projectileSpawnPoint != null ? projectileSpawnPoint.position : (transform.position + Vector3.up * 1.5f);
+            
+            // Better targeting with prediction
+            Vector3 predictedTargetPosition = player.position + Vector3.up * 1.0f; // Aim at player's torso height
+            Rigidbody playerRb = player.GetComponent<Rigidbody>();
+            if (playerRb != null)
+            {
+                // Predict player movement
+                float distanceToPlayer = Vector3.Distance(spawnPosition, player.position);
+                float projectileSpeed = 30f;
+                float timeToReach = distanceToPlayer / projectileSpeed;
+                predictedTargetPosition = player.position + Vector3.up * 1.0f + (playerRb.linearVelocity * timeToReach);
+            }
+            
+            Vector3 improvedDirection = (predictedTargetPosition - spawnPosition).normalized;
+            
+            // Instantiate projectile
+            GameObject projectile = Instantiate(waterProjectile, spawnPosition, Quaternion.LookRotation(improvedDirection));
+            
+            // Try to add velocity to projectile if it has a Rigidbody
+            Rigidbody projectileRb = projectile.GetComponent<Rigidbody>();
+            if (projectileRb != null)
+            {
+                float projectileSpeed = 30f; // Adjust speed as needed
+                projectileRb.linearVelocity = improvedDirection * projectileSpeed;
+                projectileRb.useGravity = false; // Disable gravity for straight shots
+            }
+            else
+            {
+                // If no Rigidbody, add one automatically
+                projectileRb = projectile.AddComponent<Rigidbody>();
+                projectileRb.useGravity = false;
+                float projectileSpeed = 30f;
+                projectileRb.linearVelocity = improvedDirection * projectileSpeed;
+            }
+            
+            // Destroy projectile after 5 seconds to prevent buildup
+            Destroy(projectile, 5f);
         }
 
         // Perform raycast attack
@@ -638,11 +833,36 @@ public class oneBController : MonoBehaviour
         RaycastHit hit;
         float maxAttackRange = 50f;
 
-        if (Physics.Raycast(attackRay, out hit, maxAttackRange, attackLayers))
+        // For water attacks, use a simpler layer mask that only targets player
+        LayerMask raycastLayers;
+        if (isOnWater)
+        {
+            // Only hit player layer in water to avoid hitting water surface or obstacles
+            raycastLayers = LayerMask.GetMask("Default"); // Assuming player is on Default layer
+        }
+        else
+        {
+            raycastLayers = attackLayers;
+        }
+
+        if (Physics.Raycast(attackRay, out hit, maxAttackRange, raycastLayers))
         {
             if (hit.collider.CompareTag("Player"))
             {
                 var playerTarget = hit.collider.GetComponent<Target>();
+                if (playerTarget != null)
+                {
+                    playerTarget.TakeDamage(attackDamage);
+                }
+            }
+        }
+        // If raycast missed in water, try a direct sphere check as backup
+        else if (isOnWater)
+        {
+            float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+            if (distanceToPlayer <= waterAttackRange)
+            {
+                var playerTarget = player.GetComponent<Target>();
                 if (playerTarget != null)
                 {
                     playerTarget.TakeDamage(attackDamage);
@@ -654,6 +874,7 @@ public class oneBController : MonoBehaviour
     private void ResetAttack()
     {
         alreadyAttacked = false;
+        animationTriggered = false;
     }
 
     // Animation Methods - Different animations for water vs ground
@@ -661,7 +882,7 @@ public class oneBController : MonoBehaviour
     {
         if (bossAnimator != null)
         {
-            bossAnimator.SetBool("isSurfing", true);
+            bossAnimator.SetBool("isOnBoard", true);
         }
     }
 
@@ -669,14 +890,26 @@ public class oneBController : MonoBehaviour
     {
         if (bossAnimator != null)
         {
-            if (isSurfing)
+            if (isOnWater)
             {
-                bossAnimator.SetBool("isSurfing", true);
+                bossAnimator.SetBool("isOnBoard", true);
             }
             else
             {
                 bossAnimator.SetBool("isWalking", true);
+                bossAnimator.SetBool("isRunning", false); // Ensure running is off when walking
+                bossAnimator.SetBool("isOnBoard", false); // Ensure surfing is off on land
             }
+        }
+    }
+
+    private void PlayRunAnimation()
+    {
+        if (bossAnimator != null)
+        {
+            bossAnimator.SetBool("isRunning", true);
+            bossAnimator.SetBool("isWalking", false); // Ensure walking is off when running
+            bossAnimator.SetBool("isOnBoard", false); // Ensure surfing is off on land
         }
     }
 
@@ -685,9 +918,9 @@ public class oneBController : MonoBehaviour
         if (bossAnimator != null)
         {
             bossAnimator.SetBool("isWalking", false);
-            if (!isSurfing)
+            if (!isOnWater)
             {
-                bossAnimator.SetBool("isSurfing", false);
+                bossAnimator.SetBool("isOnBoard", false);
             }
         }
     }
@@ -705,12 +938,15 @@ public class oneBController : MonoBehaviour
         if (bossAnimator != null)
         {
             // Set idle state based on current mode
-            if (isSurfing)
+            if (isOnWater)
             {
-                bossAnimator.SetBool("isSurfing", true);
+                bossAnimator.SetBool("isOnBoard", true);
+                bossAnimator.SetBool("isWalking", false);
+                bossAnimator.SetBool("isRunning", false);
             }
             else
             {
+                bossAnimator.SetBool("isOnBoard", false);
                 bossAnimator.SetBool("isWalking", false);
                 bossAnimator.SetBool("isRunning", false);
             }
@@ -728,24 +964,26 @@ public class oneBController : MonoBehaviour
             agent.isStopped = true;
             agent.enabled = false;
         }
-        
-        // Disable surfboard if active
-        if (surfboard != null)
+
+        // Stop surfing particle effect on death
+        if (surfingWaterEffect != null)
         {
-            surfboard.SetActive(false);
+            surfingWaterEffect.Stop();
+            surfingWaterEffect.gameObject.SetActive(false);
         }
+        
+        // Keep surfboard and water weapon active during death animation
+        // They will be disabled when the object is destroyed
         
         // Stop all movement animations before playing death
         if (bossAnimator != null)
         {
-            bossAnimator.SetBool("isSurfing", false);
+            bossAnimator.SetBool("isOnBoard", false);
             bossAnimator.SetBool("isWalking", false);
             bossAnimator.SetBool("isRunning", false);
             
             // Reset any attack triggers that might be active
-            bossAnimator.ResetTrigger("Slash1");
-            bossAnimator.ResetTrigger("Slash2");
-            bossAnimator.ResetTrigger("Slash3");
+            bossAnimator.ResetTrigger("Kick");
             bossAnimator.ResetTrigger("Throw");
             bossAnimator.ResetTrigger("Block1");
             bossAnimator.ResetTrigger("Block2");
@@ -774,12 +1012,6 @@ public class oneBController : MonoBehaviour
     /// </summary>
     public void ActivateBoss()
     {
-        // Play activation sound
-        if (activationSound != null && attackSFX != null)
-        {
-            attackSFX.PlayOneShot(activationSound);
-        }
-
         // Play intimidation effect
         if (intimidationEffect != null)
         {
@@ -865,6 +1097,19 @@ public class oneBController : MonoBehaviour
         {
             surfboard.SetActive(false);
         }
+        
+        // Disable water weapon if active
+        if (waterWeapon != null)
+        {
+            waterWeapon.SetActive(false);
+        }
+
+        // Stop surfing particle effect if active
+        if (surfingWaterEffect != null)
+        {
+            surfingWaterEffect.Stop();
+            surfingWaterEffect.gameObject.SetActive(false);
+        }
     }
 
     /// <summary>
@@ -872,11 +1117,11 @@ public class oneBController : MonoBehaviour
     /// </summary>
     public void SetSurfingState(bool surfing)
     {
-        if (surfing && !isSurfing)
+        if (surfing && !isOnWater)
         {
             EnterWaterMode();
         }
-        else if (!surfing && isSurfing)
+        else if (!surfing && isOnWater)
         {
             ExitWaterMode();
         }
@@ -887,7 +1132,7 @@ public class oneBController : MonoBehaviour
     /// </summary>
     public bool IsSurfing()
     {
-        return isSurfing;
+        return isOnWater;
     }
 
     /// <summary>
@@ -932,7 +1177,7 @@ public class oneBController : MonoBehaviour
         // Draw water detection radius
         if (enableWaterSurfing)
         {
-            Gizmos.color = isSurfing ? Color.cyan : Color.white;
+            Gizmos.color = isOnWater ? Color.cyan : Color.white;
             Gizmos.DrawWireSphere(transform.position, waterCheckRadius);
         }
     }
