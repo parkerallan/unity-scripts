@@ -4,14 +4,17 @@ public class DialogueTrigger : MonoBehaviour
 {
     public Dialogue dialogue;
     public GameObject markerEffect;
+    [Header("Trigger Options")]
+    public bool disableAfterDialogue = false; // Checkbox to disable trigger after dialogue ends
     private bool isPlayerInRange = false;
     private bool hasDialogueEnded = false;
+    private bool isTriggerDisabled = false; // Track if trigger is permanently disabled
     private Rigidbody playerRigidbody;
 
     // Public method to check if player is in dialogue range
     public bool IsPlayerInDialogueRange()
     {
-        return isPlayerInRange;
+        return isPlayerInRange && !isTriggerDisabled;
     }
 
     // --- Smooth rotation fields ---
@@ -23,6 +26,9 @@ public class DialogueTrigger : MonoBehaviour
 
     void Update()
     {
+        // Skip all functionality if trigger is disabled
+        if (isTriggerDisabled) return;
+        
         // Dialogue trigger logic
         if (isPlayerInRange && Input.GetKeyDown(KeyCode.E) && !hasDialogueEnded)
         {
@@ -59,6 +65,9 @@ public class DialogueTrigger : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        // Skip if trigger is disabled
+        if (isTriggerDisabled) return;
+        
         if (other.CompareTag("Player"))
         {
             isPlayerInRange = true;
@@ -70,6 +79,9 @@ public class DialogueTrigger : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
+        // Skip if trigger is disabled
+        if (isTriggerDisabled) return;
+        
         if (other.CompareTag("Player"))
         {
             isPlayerInRange = false;
@@ -113,9 +125,23 @@ public class DialogueTrigger : MonoBehaviour
     private void HandleDialogueEnd()
     {
         hasDialogueEnded = true;
-        if (this != null && gameObject != null && enabled)
+        
+        if (disableAfterDialogue)
         {
-            Invoke(nameof(ResetDialogue), 1f);
+            // Permanently disable the trigger functionality
+            isTriggerDisabled = true;
+            isPlayerInRange = false;
+            // Hide marker effect if it exists
+            if (markerEffect != null)
+                markerEffect.SetActive(false);
+        }
+        else
+        {
+            // Original behavior - reset after delay
+            if (this != null && gameObject != null && enabled)
+            {
+                Invoke(nameof(ResetDialogue), 1f);
+            }
         }
     }
 

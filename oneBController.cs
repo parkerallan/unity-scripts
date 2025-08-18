@@ -65,7 +65,8 @@ public class oneBController : MonoBehaviour
     public bool enableWaterSurfing = true;
 
     [Header("Attack Effects")]
-    public AudioClip attackSFXClip;
+    public AudioClip attackSFXClip; // Used for throw attacks
+    public AudioClip kickSFXClip; // Separate SFX clip for kick attacks
     public float attackSFXVolume = 1f;
 
     [Header("Boss Specific Effects")]
@@ -742,10 +743,24 @@ public class oneBController : MonoBehaviour
     {
         if (player == null) return;
 
-        // Play attack sound effect using SFXManager
-        if (attackSFXClip != null && SFXManager.instance != null)
+        // Play appropriate attack sound effect using SFXManager
+        if (SFXManager.instance != null)
         {
-            SFXManager.instance.PlaySFXClip(attackSFXClip, transform, attackSFXVolume);
+            if (isOnWater && attackSFXClip != null)
+            {
+                // Water attacks use the regular attack SFX (throw sound)
+                SFXManager.instance.PlaySFXClip(attackSFXClip, transform, attackSFXVolume);
+            }
+            else if (!isOnWater && kickSFXClip != null)
+            {
+                // Ground attacks use the kick SFX
+                SFXManager.instance.PlaySFXClip(kickSFXClip, transform, attackSFXVolume);
+            }
+            else if (attackSFXClip != null)
+            {
+                // Fallback to regular attack SFX if kick SFX is not assigned
+                SFXManager.instance.PlaySFXClip(attackSFXClip, transform, attackSFXVolume);
+            }
         }
 
         // Calculate attack direction with accuracy variation
@@ -1040,6 +1055,12 @@ public class oneBController : MonoBehaviour
             {
                 agent.speed = 3.5f; // Default movement speed
             }
+        }
+        
+        // Disable invincibility when boss becomes active
+        if (bossTarget != null)
+        {
+            bossTarget.DisableInvincibility();
         }
     }
 

@@ -92,11 +92,15 @@ public class twoBController : MonoBehaviour
   // Audio cooldown to prevent double SFX
   private float lastAudioPlayTime = 0f;
   private float audioPlayCooldown = 1f; // Minimum time between audio plays
+  
+  // Boss target reference for invincibility management
+  private Target bossTarget;
 
   private void Awake()
   {
     player = GameObject.Find("CharModel1").transform;
     agent = GetComponent<NavMeshAgent>();
+    bossTarget = GetComponent<Target>();
     
     // Store original agent speed for restoration
     if (agent != null)
@@ -1019,6 +1023,12 @@ public class twoBController : MonoBehaviour
         }
         
         // Debug.Log($"{bossName} AI activated! Agent speed: {agent.speed}, On NavMesh: {agent.isOnNavMesh}");
+    }
+    
+    // Disable invincibility when boss becomes active
+    if (bossTarget != null)
+    {
+        bossTarget.DisableInvincibility();
     }
     
     // Debug.Log($"{bossName} is now active and patrolling!");

@@ -59,7 +59,11 @@ public class oneCController : MonoBehaviour
     public float rushDuration = 3f; // How long to rush before transitioning back
 
     [Header("Attack Effects")]
-    public AudioSource attackSFX;
+    public AudioClip slash1SFXClip;
+    public AudioClip slash2SFXClip;
+    public AudioClip slash3SFXClip;
+    public AudioClip blockSFXClip; // Same clip used for all block animations
+    public float attackSFXVolume = 1f;
     public ParticleSystem muzzleFlash;
     public ParticleSystem casingEffect;
 
@@ -235,10 +239,10 @@ public class oneCController : MonoBehaviour
 
     private void OnPhaseChange()
     {
-        // Play phase change sound
-        if (phaseChangeSound != null && attackSFX != null)
+        // Play phase change sound using SFXManager
+        if (phaseChangeSound != null && SFXManager.instance != null)
         {
-            attackSFX.PlayOneShot(phaseChangeSound);
+            SFXManager.instance.PlaySFXClip(phaseChangeSound, transform, attackSFXVolume);
         }
 
         // Adjust stats based on phase
@@ -506,10 +510,12 @@ public class oneCController : MonoBehaviour
         }
 
         // Attack immediately every time, no conditions
+        string attackTrigger = "";
         if (bossAnimator != null)
         {
             if (isRushing)
             {
+                attackTrigger = "Slash2";
                 bossAnimator.SetTrigger("Slash2");
                 isRushing = false; // End rush state when attacking
                 // Transition back to normal movement animations
@@ -520,36 +526,60 @@ public class oneCController : MonoBehaviour
                 // Prefer Slash1 when flying for more aggressive aerial attacks
                 if (IsFlying())
                 {
+                    attackTrigger = "Slash1";
                     bossAnimator.SetTrigger("Slash1"); // Consistent aggressive flying attack
                 }
                 else if (useRandomAttackAnimations)
                 {
                     int randomAttack = Random.Range(1, 4);
+                    attackTrigger = $"Slash{randomAttack}";
                     bossAnimator.SetTrigger($"Slash{randomAttack}");
                 }
                 else
                 {
+                    attackTrigger = "Slash1";
                     bossAnimator.SetTrigger("Slash1");
                 }
             }
         }
         
-        // Do damage
-        PerformRaycastAttack();
+        // Do damage and play appropriate sound
+        PerformRaycastAttack(attackTrigger);
         
         // Set attack cooldown
         alreadyAttacked = true;
         Invoke(nameof(ResetAttack), timeBetweenAttacks);
     }
 
-    private void PerformRaycastAttack()
+    private void PerformRaycastAttack(string attackType = "Slash1")
     {
         if (player == null) return;
 
-        // Play attack sound effect
-        if (attackSFX != null)
+        // Play appropriate attack sound effect using SFXManager
+        if (SFXManager.instance != null)
         {
-            attackSFX.Play();
+            AudioClip clipToPlay = null;
+            
+            switch (attackType)
+            {
+                case "Slash1":
+                    clipToPlay = slash1SFXClip;
+                    break;
+                case "Slash2":
+                    clipToPlay = slash2SFXClip;
+                    break;
+                case "Slash3":
+                    clipToPlay = slash3SFXClip;
+                    break;
+                default:
+                    clipToPlay = slash1SFXClip; // Fallback to Slash1
+                    break;
+            }
+            
+            if (clipToPlay != null)
+            {
+                SFXManager.instance.PlaySFXClip(clipToPlay, transform, attackSFXVolume);
+            }
         }
 
         // Play muzzle flash effect
@@ -822,10 +852,10 @@ public class oneCController : MonoBehaviour
     /// </summary>
     public void ActivateBoss()
     {
-        // Play activation sound
-        if (activationSound != null && attackSFX != null)
+        // Play activation sound using SFXManager
+        if (activationSound != null && SFXManager.instance != null)
         {
-            attackSFX.PlayOneShot(activationSound);
+            SFXManager.instance.PlaySFXClip(activationSound, transform, attackSFXVolume);
         }
 
         // Play intimidation effect
@@ -857,6 +887,12 @@ public class oneCController : MonoBehaviour
                 agent.speed = 3.5f; // Default movement speed
             }
         }
+        
+        // Disable invincibility when boss becomes active
+        if (bossTarget != null)
+        {
+            bossTarget.DisableInvincibility();
+        }
     }
 
     /// <summary>
@@ -886,6 +922,12 @@ public class oneCController : MonoBehaviour
             else
             {
                 bossAnimator.SetTrigger("Block1");
+            }
+            
+            // Play block sound effect using SFXManager
+            if (blockSFXClip != null && SFXManager.instance != null)
+            {
+                SFXManager.instance.PlaySFXClip(blockSFXClip, transform, attackSFXVolume);
             }
         }
     }

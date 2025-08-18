@@ -14,6 +14,10 @@ public class Target : MonoBehaviour
     public bool isEnemy = true; // Set to true if this gives points when killed
     public int pointValue = 100; // Points awarded when this target is killed
     
+    [Header("Boss Invincibility")]
+    public bool isBoss = false; // Set to true for boss characters
+    public bool isInvincible = false; // Set to true to make target invincible
+    
     // Private variables
     private bool isDead = false; // Prevent multiple scoring from same enemy
     
@@ -58,6 +62,13 @@ public class Target : MonoBehaviour
     {
         // Store the max health for health bar calculations
         maxHealth = health;
+        
+        // Set invincibility for bosses by default
+        if (isBoss)
+        {
+            isInvincible = true;
+            Debug.Log($"Boss {gameObject.name} initialized as invincible");
+        }
         
         // Get all renderers in this object and its children
         renderers = GetComponentsInChildren<Renderer>();
@@ -155,8 +166,15 @@ public class Target : MonoBehaviour
     
     public void TakeDamage(float amount)
     {
-        // Don't take damage if already dead
-        if (isDead) return;
+        // Don't take damage if already dead or invincible
+        if (isDead || isInvincible) 
+        {
+            if (isInvincible && isBoss)
+            {
+                Debug.Log($"Boss {gameObject.name} is invincible - damage blocked");
+            }
+            return;
+        }
         
         health -= amount;
         
@@ -215,6 +233,35 @@ public class Target : MonoBehaviour
         }
         
         return actualHealAmount;
+    }
+    
+    /// <summary>
+    /// Disable invincibility for this target (used for boss activation)
+    /// </summary>
+    public void DisableInvincibility()
+    {
+        if (isInvincible)
+        {
+            isInvincible = false;
+            Debug.Log($"Target {gameObject.name}: Invincibility disabled - can now take damage");
+        }
+    }
+    
+    /// <summary>
+    /// Enable invincibility for this target
+    /// </summary>
+    public void EnableInvincibility()
+    {
+        isInvincible = true;
+        Debug.Log($"Target {gameObject.name}: Invincibility enabled - immune to damage");
+    }
+    
+    /// <summary>
+    /// Check if this target is currently invincible
+    /// </summary>
+    public bool IsInvincible()
+    {
+        return isInvincible;
     }
     
     /// <summary>
