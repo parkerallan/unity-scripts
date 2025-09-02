@@ -741,5 +741,27 @@ public class PlayerController : MonoBehaviour
         animator.SetTrigger("Death");
         canMove = false; // Disable movement during death animation
         // Debug.Log("Death animation triggered");
+        
+        // Start coroutine to handle delay and scene transition
+        StartCoroutine(HandleDeathSequence());
+    }
+    
+    private IEnumerator HandleDeathSequence()
+    {
+        // Wait 2 seconds after death animation
+        yield return new WaitForSeconds(2f);
+        
+        // Load the start screen
+        ProgrammaticBuildingEntry buildingEntry = FindFirstObjectByType<ProgrammaticBuildingEntry>();
+        if (buildingEntry != null)
+        {
+            buildingEntry.LoadScene("StartScreen", "StartPoint");
+        }
+        else
+        {
+            Debug.LogWarning("PlayerController: No ProgrammaticBuildingEntry found - cannot return to start screen");
+            // Fallback to Unity's scene manager
+            UnityEngine.SceneManagement.SceneManager.LoadScene("StartScreen");
+        }
     }
 }

@@ -10,12 +10,20 @@ public class MenuManager : MonoBehaviour
     public GameObject SoundMenu;
     public GameObject ExitMenu;
     public GameObject VideoMenu;
+    public GameObject CreditsMenu;
+    public GameObject SettingsMenu;
     //public GameObject LoadGameMenu;
     //public GameObject SaveGameMenu;
     public GameObject MainMenu;
     public bool isSubMenuOpen = false;
     public TMP_Dropdown resolutionDropdown; // Reference to the quality dropdown
     Resolution[] resolutions;
+
+    [Header("Scene Transition")]
+    public ProgrammaticBuildingEntry buildingEntry; // Reference to the building entry system
+
+    [Header("Save/Load System")]
+    public SaveManager saveManager; // Reference to the save manager
 
     //private bool isGameStarted = false;
 
@@ -69,26 +77,83 @@ public class MenuManager : MonoBehaviour
         resolutionDropdown.value = currentResolutionIndex; // Set the current resolution index
         resolutionDropdown.RefreshShownValue(); // Refresh the dropdown to show the current value
         
+        // Update button states based on save file availability
+        UpdateMenuButtonStates();
+        
+        // Ensure SceneTransitionOverlay instance exists
+        EnsureSceneTransitionOverlay();
+        
         Debug.Log("MenuManager: Initialized successfully in scene: " + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+    
+    /// <summary>
+    /// Ensure SceneTransitionOverlay instance exists for scene transitions
+    /// </summary>
+    private void EnsureSceneTransitionOverlay()
+    {
+        try
+        {
+            Debug.Log("MenuManager: Creating/Finding SceneTransitionOverlay instance...");
+            
+            // Force access to Instance property to create it if needed
+            var overlay = SceneTransitionOverlay.Instance;
+            if (overlay != null)
+            {
+                Debug.Log($"MenuManager: SceneTransitionOverlay instance confirmed - GameObject: {overlay.gameObject.name}");
+            }
+            else
+            {
+                Debug.LogError("MenuManager: SceneTransitionOverlay instance is null after creation attempt!");
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"MenuManager: Failed to ensure SceneTransitionOverlay: {e.Message}");
+            Debug.LogError($"MenuManager: Stack trace: {e.StackTrace}");
+        }
     }
 
     void Update()
     {
+        // Quick save/load shortcuts (only when not in menus)
+        if (!isSubMenuOpen && (PauseMenu == null || !PauseMenu.activeSelf) && (MainMenu == null || !MainMenu.activeSelf))
+        {
+            // F5 for quick save
+            if (Input.GetKeyDown(KeyCode.F5))
+            {
+                SaveGame();
+            }
+            
+            // F9 for quick load
+            if (Input.GetKeyDown(KeyCode.F9))
+            {
+                LoadGame();
+            }
+        }
+        
         // Check if the Escape key is pressed
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             // If a submenu is open, close it and return to the pause menu
             if (isSubMenuOpen)
             {
-                if (SoundMenu.activeSelf)
+                if (SoundMenu != null && SoundMenu.activeSelf)
                 {
                     CloseSoundMenu(); // Close the sound menu
                 }
-                else if (VideoMenu.activeSelf)
+                else if (VideoMenu != null && VideoMenu.activeSelf)
                 {
                     CloseVideoMenu(); // Close the video menu
                 }
-                else if (ExitMenu.activeSelf)
+                else if (SettingsMenu != null && SettingsMenu.activeSelf)
+                {
+                    CloseSettingsMenu(); // Close the settings menu
+                }
+                else if (CreditsMenu != null && CreditsMenu.activeSelf)
+                {
+                    CloseCreditsMenu(); // Close the credits menu
+                }
+                else if (ExitMenu != null && ExitMenu.activeSelf)
                 {
                     CloseExitConfirmationModal(); // Close the exit confirmation modal
                 }
@@ -109,10 +174,10 @@ public class MenuManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             // If the modal is open, close both the modal and the pause menu
-            if (ExitMenu.activeSelf)
+            if (ExitMenu != null && ExitMenu.activeSelf)
             {
                 ExitMenu.SetActive(false); // Hide the modal
-                PauseMenu.SetActive(false); // Hide the pause menu
+                if (PauseMenu != null) PauseMenu.SetActive(false); // Hide the pause menu
                 ResumeGame();
                 return;
             }
@@ -133,7 +198,7 @@ public class MenuManager : MonoBehaviour
     {
         Time.timeScale = 0f; // Pause the game
         SetCursorState(true, CursorLockMode.None); // Show and unlock cursor
-        PauseMenu.SetActive(true); // Show the pause menu
+        if (PauseMenu != null) PauseMenu.SetActive(true); // Show the pause menu
         
         // Disable player controls
         DisablePlayerControls();
@@ -149,7 +214,7 @@ public class MenuManager : MonoBehaviour
     {
         Time.timeScale = 1f; // Resume the game
         SetCursorState(false, CursorLockMode.Locked); // Hide and lock cursor
-        PauseMenu.SetActive(false); // Hide the pause menu
+        if (PauseMenu != null) PauseMenu.SetActive(false); // Hide the pause menu
         
         // Re-enable player controls
         EnablePlayerControls();
@@ -274,6 +339,13 @@ public class MenuManager : MonoBehaviour
     }
     public void ClosePauseMenu()
     {
+        // Add null check for title screen compatibility
+        if (PauseMenu == null)
+        {
+            Debug.LogWarning("MenuManager: PauseMenu not assigned - this is normal for title screen");
+            return;
+        }
+        
         if (PauseMenu.activeSelf && !isSubMenuOpen)
         {
             // If the pause menu is open and no sub-menu is open, close the pause menu
@@ -282,51 +354,510 @@ public class MenuManager : MonoBehaviour
         else if (!PauseMenu.activeSelf && isSubMenuOpen)
         {
             PauseMenu.SetActive(false); // Show the pause menu
-            SoundMenu.SetActive(false); // Hide the sound menu
-            VideoMenu.SetActive(false); // Hide the video menu
+            if (SoundMenu != null) SoundMenu.SetActive(false); // Hide the sound menu
+            if (VideoMenu != null) VideoMenu.SetActive(false); // Hide the video menu
             isSubMenuOpen = false; // Mark that no sub-menu is open
             ResumeGame();
         }
     }
 
-    public void StartGame()
+    public void OpenNewGame()
     {
-        // Called when the player starts the game from the Main Menu
-        MainMenu.SetActive(false); // Hide the Main Menu
-        ResumeGame();
-        //isGameStarted = true; // Mark the game as started
+        // Start a new game by transitioning to the bedroom scene
+        Debug.Log("MenuManager: Starting new game - transitioning to Home scene at BedroomSpawnPoint");
+        
+        if (buildingEntry != null)
+        {
+            // Hide the main menu before transitioning
+            if (MainMenu != null) MainMenu.SetActive(false);
+            
+            // Use LoadScene instead of EnterBuilding since there's no existing player in menu scene
+            buildingEntry.LoadScene("Home", "BedroomSpawnPoint");
+        }
+        else
+        {
+            Debug.LogError("MenuManager: ProgrammaticBuildingEntry reference not assigned! Cannot start new game.");
+        }
     }
+    
+    /// <summary>
+    /// Save the current game state
+    /// </summary>
+    public void SaveGame()
+    {
+        // Try to find SaveManager if not assigned
+        if (saveManager == null)
+        {
+            saveManager = FindAnyObjectByType<SaveManager>();
+        }
+        
+        if (saveManager != null)
+        {
+            bool success = saveManager.SaveGame();
+            if (success)
+            {
+                Debug.Log("MenuManager: Game saved successfully");
+                // Update button states after successful save
+                UpdateMenuButtonStates();
+            }
+            else
+            {
+                Debug.LogError("MenuManager: Failed to save game");
+            }
+        }
+        else
+        {
+            Debug.LogError("MenuManager: SaveManager not found - cannot save game");
+        }
+    }
+    
+    /// <summary>
+    /// Load a saved game
+    /// </summary>
+    public void LoadGame()
+    {
+        // Try to find SaveManager if not assigned
+        if (saveManager == null)
+        {
+            saveManager = FindAnyObjectByType<SaveManager>();
+        }
+        
+        if (saveManager != null)
+        {
+            if (saveManager.SaveFileExists())
+            {
+                Debug.Log("MenuManager: Starting game load...");
+                
+                // Show transition overlay immediately
+                try
+                {
+                    if (SceneTransitionOverlay.Instance != null)
+                    {
+                        SceneTransitionOverlay.Instance.ShowOverlay();
+                        Debug.Log("MenuManager: Transition overlay shown for load");
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"MenuManager: Could not show transition overlay: {e.Message}");
+                }
+                
+                // Hide any open menus immediately
+                if (MainMenu != null) MainMenu.SetActive(false);
+                if (PauseMenu != null) PauseMenu.SetActive(false);
+                CloseAllSubMenus();
+                
+                // Ensure proper game state before loading
+                Time.timeScale = 1f;
+                isSubMenuOpen = false;
+                
+                bool success = saveManager.LoadGame();
+                if (success)
+                {
+                    Debug.Log("MenuManager: Game loaded successfully");
+                    
+                    // Additional cleanup after successful load
+                    StartCoroutine(PostLoadCleanup());
+                }
+                else
+                {
+                    Debug.LogError("MenuManager: Failed to load game");
+                    
+                    // Hide overlay on failed load
+                    try
+                    {
+                        if (SceneTransitionOverlay.Instance != null)
+                        {
+                            SceneTransitionOverlay.Instance.ForceHideOverlay();
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"MenuManager: Could not hide overlay after failed load: {e.Message}");
+                    }
+                    
+                    // If load failed and we're in a menu scene, show main menu again
+                    if (MainMenu != null && UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("Menu"))
+                    {
+                        MainMenu.SetActive(true);
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogWarning("MenuManager: No save file found to load");
+            }
+        }
+        else
+        {
+            Debug.LogError("MenuManager: SaveManager not found - cannot load game");
+        }
+    }
+    
+    /// <summary>
+    /// Cleanup after loading to ensure proper game state
+    /// </summary>
+    private System.Collections.IEnumerator PostLoadCleanup()
+    {
+        // Wait a frame for scene to fully initialize
+        yield return null;
+        
+        // Ensure all menus are hidden
+        if (MainMenu != null) MainMenu.SetActive(false);
+        if (PauseMenu != null) PauseMenu.SetActive(false);
+        CloseAllSubMenus();
+        
+        // Set proper game state
+        Time.timeScale = 1f;
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+        isSubMenuOpen = false;
+        
+        // Force refresh UI to clear any overlay issues
+        RefreshUIComponents();
+        
+        Debug.Log("MenuManager: Post-load cleanup completed");
+    }
+    
+    /// <summary>
+    /// Check if a save file exists
+    /// </summary>
+    public bool HasSaveFile()
+    {
+        // Try to find SaveManager if not assigned
+        if (saveManager == null)
+        {
+            saveManager = FindAnyObjectByType<SaveManager>();
+        }
+        
+        if (saveManager != null)
+        {
+            return saveManager.SaveFileExists();
+        }
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Delete the current save file
+    /// </summary>
+    public void DeleteSave()
+    {
+        // Try to find SaveManager if not assigned
+        if (saveManager == null)
+        {
+            saveManager = FindAnyObjectByType<SaveManager>();
+        }
+        
+        if (saveManager != null)
+        {
+            bool success = saveManager.DeleteSave();
+            if (success)
+            {
+                Debug.Log("MenuManager: Save file deleted successfully");
+            }
+            else
+            {
+                Debug.LogWarning("MenuManager: No save file to delete or deletion failed");
+            }
+        }
+        else
+        {
+            Debug.LogError("MenuManager: SaveManager not found - cannot delete save");
+        }
+    }
+    
+    /// <summary>
+    /// Close all sub-menus (helper method for loading)
+    /// </summary>
+    private void CloseAllSubMenus()
+    {
+        if (SoundMenu != null) SoundMenu.SetActive(false);
+        if (VideoMenu != null) VideoMenu.SetActive(false);
+        if (ExitMenu != null) ExitMenu.SetActive(false);
+        if (CreditsMenu != null) CreditsMenu.SetActive(false);
+        if (SettingsMenu != null) SettingsMenu.SetActive(false);
+        isSubMenuOpen = false;
+    }
+    
+    /// <summary>
+    /// Button handler for Save Game button clicks
+    /// </summary>
+    public void OnSaveButtonClicked()
+    {
+        Debug.Log("MenuManager: Save button clicked");
+        SaveGame();
+    }
+    
+    /// <summary>
+    /// Button handler for Load Game button clicks
+    /// </summary>
+    public void OnLoadButtonClicked()
+    {
+        Debug.Log("MenuManager: Load button clicked");
+        
+        // Show overlay immediately for visual feedback
+        try
+        {
+            if (SceneTransitionOverlay.Instance != null)
+            {
+                SceneTransitionOverlay.Instance.ShowOverlay();
+                Debug.Log("MenuManager: Overlay shown from Load button click");
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"MenuManager: Could not show overlay from button: {e.Message}");
+        }
+        
+        LoadGame();
+    }
+    
+    /// <summary>
+    /// Button handler for Continue button clicks (same as load)
+    /// </summary>
+    public void OnContinueButtonClicked()
+    {
+        Debug.Log("MenuManager: Continue button clicked");
+        
+        // Show overlay immediately for visual feedback
+        try
+        {
+            if (SceneTransitionOverlay.Instance != null)
+            {
+                SceneTransitionOverlay.Instance.ShowOverlay();
+                Debug.Log("MenuManager: Overlay shown from Continue button click");
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"MenuManager: Could not show overlay from button: {e.Message}");
+        }
+        
+        LoadGame();
+    }
+    
+    /// <summary>
+    /// Enhanced New Game button handler
+    /// </summary>
+    public void OnNewGameButtonClicked()
+    {
+        Debug.Log("MenuManager: New Game button clicked");
+        OpenNewGame();
+    }
+    
+    /// <summary>
+    /// Update button states based on save file existence
+    /// </summary>
+    public void UpdateMenuButtonStates()
+    {
+        bool hasSaveFile = HasSaveFile();
+        
+        // Find and update Continue button (usually in main menu)
+        Button continueButton = GameObject.Find("ContinueButton")?.GetComponent<Button>();
+        if (continueButton != null)
+        {
+            continueButton.interactable = hasSaveFile;
+            Debug.Log($"MenuManager: Continue button {(hasSaveFile ? "enabled" : "disabled")}");
+        }
+        
+        // Find and update Load button (usually in pause menu)
+        Button loadButton = GameObject.Find("LoadButton")?.GetComponent<Button>();
+        if (loadButton != null)
+        {
+            loadButton.interactable = hasSaveFile;
+            Debug.Log($"MenuManager: Load button {(hasSaveFile ? "enabled" : "disabled")}");
+        }
+        
+        // Save button is always available (if it exists)
+        Button saveButton = GameObject.Find("SaveButton")?.GetComponent<Button>();
+        if (saveButton != null)
+        {
+            saveButton.interactable = true;
+        }
+        
+        // New Game button is always available (if it exists)
+        Button newGameButton = GameObject.Find("NewGameButton")?.GetComponent<Button>();
+        if (newGameButton != null)
+        {
+            newGameButton.interactable = true;
+        }
+    }
+    
+    public void OpenSettingsMenu()
+    {
+        // Open settings menu from main title screen
+        Debug.Log("MenuManager: Opening Settings Menu from main screen");
+        if (SettingsMenu != null)
+        {
+            SettingsMenu.SetActive(true); // Show the settings menu
+            if (MainMenu != null) MainMenu.SetActive(false); // Hide the main menu
+            isSubMenuOpen = true; // Mark that a sub-menu is open
+        }
+        else
+        {
+            Debug.LogWarning("MenuManager: SettingsMenu not assigned - cannot open settings");
+        }
+    }
+    
+    public void OpenCreditsMenu()
+    {
+        // Open credits menu from main title screen
+        Debug.Log("MenuManager: Opening Credits Menu from main screen");
+        if (CreditsMenu != null)
+        {
+            CreditsMenu.SetActive(true); // Show the credits menu
+            if (MainMenu != null) MainMenu.SetActive(false); // Hide the main menu
+            isSubMenuOpen = true; // Mark that a sub-menu is open
+        }
+        else
+        {
+            Debug.LogWarning("MenuManager: CreditsMenu not assigned - cannot open credits");
+        }
+    }
+    
+    public void CloseToMainMenu()
+    {
+        // Return to main menu from any submenu
+        Debug.Log("MenuManager: Returning to Main Menu");
+        if (SoundMenu != null) SoundMenu.SetActive(false); // Hide settings menu
+        if (VideoMenu != null) VideoMenu.SetActive(false); // Hide video menu
+        if (ExitMenu != null) ExitMenu.SetActive(false); // Hide exit menu
+        if (CreditsMenu != null) CreditsMenu.SetActive(false); // Hide credits menu
+        if (SettingsMenu != null) SettingsMenu.SetActive(false); // Hide settings menu
+        if (MainMenu != null) MainMenu.SetActive(true); // Show main menu
+        isSubMenuOpen = false; // Mark that no sub-menu is open
+    }
+    
+    public void CloseSettingsMenu()
+    {
+        if (SettingsMenu != null) SettingsMenu.SetActive(false); // Hide the settings menu
+        
+        // Check if we came from main menu or pause menu (with null checks)
+        bool mainMenuExists = MainMenu != null;
+        bool pauseMenuExists = PauseMenu != null;
+        bool mainMenuActive = mainMenuExists && MainMenu.activeSelf;
+        bool pauseMenuActive = pauseMenuExists && PauseMenu.activeSelf;
+        
+        if (mainMenuExists && !mainMenuActive && !pauseMenuActive)
+        {
+            // We came from main menu, return to main menu
+            MainMenu.SetActive(true);
+            Debug.Log("MenuManager: Returning to Main Menu from Settings");
+        }
+        else if (pauseMenuExists)
+        {
+            // We came from pause menu, return to pause menu
+            PauseMenu.SetActive(true);
+            Debug.Log("MenuManager: Returning to Pause Menu from Settings");
+        }
+        else
+        {
+            // No valid menu to return to, default to main menu if available
+            if (mainMenuExists)
+            {
+                MainMenu.SetActive(true);
+                Debug.Log("MenuManager: Defaulting to Main Menu from Settings");
+            }
+        }
+        
+        isSubMenuOpen = false; // Mark that no sub-menu is open
+    }
+    
+    public void CloseCreditsMenu()
+    {
+        if (CreditsMenu != null) CreditsMenu.SetActive(false); // Hide the credits menu
+        
+        // Check if we came from main menu or pause menu (with null checks)
+        bool mainMenuExists = MainMenu != null;
+        bool pauseMenuExists = PauseMenu != null;
+        bool mainMenuActive = mainMenuExists && MainMenu.activeSelf;
+        bool pauseMenuActive = pauseMenuExists && PauseMenu.activeSelf;
+        
+        if (mainMenuExists && !mainMenuActive && !pauseMenuActive)
+        {
+            // We came from main menu, return to main menu
+            MainMenu.SetActive(true);
+            Debug.Log("MenuManager: Returning to Main Menu from Credits");
+        }
+        else if (pauseMenuExists)
+        {
+            // We came from pause menu, return to pause menu
+            PauseMenu.SetActive(true);
+            Debug.Log("MenuManager: Returning to Pause Menu from Credits");
+        }
+        else
+        {
+            // No valid menu to return to, default to main menu if available
+            if (mainMenuExists)
+            {
+                MainMenu.SetActive(true);
+                Debug.Log("MenuManager: Defaulting to Main Menu from Credits");
+            }
+        }
+        
+        isSubMenuOpen = false; // Mark that no sub-menu is open
+    }
+    
     public void OpenSoundMenu()
     {
-        SoundMenu.SetActive(true); // Show the sound menu
-        PauseMenu.SetActive(false); // Hide the pause menu
+        if (SoundMenu != null) SoundMenu.SetActive(true); // Show the sound menu
+        if (PauseMenu != null) PauseMenu.SetActive(false); // Hide the pause menu
         isSubMenuOpen = true; // Mark that a sub-menu is open
     }
     public void CloseSoundMenu()
     {
-        SoundMenu.SetActive(false); // Hide the sound menu
-        PauseMenu.SetActive(true); // Show the pause menu
+        if (SoundMenu != null) SoundMenu.SetActive(false); // Hide the sound menu
+        
+        // Check if we came from main menu or pause menu (with null checks)
+        bool mainMenuExists = MainMenu != null;
+        bool pauseMenuExists = PauseMenu != null;
+        bool mainMenuActive = mainMenuExists && MainMenu.activeSelf;
+        bool pauseMenuActive = pauseMenuExists && PauseMenu.activeSelf;
+        
+        if (mainMenuExists && !mainMenuActive && !pauseMenuActive)
+        {
+            // We came from main menu, return to main menu
+            MainMenu.SetActive(true);
+            Debug.Log("MenuManager: Returning to Main Menu from Settings");
+        }
+        else if (pauseMenuExists)
+        {
+            // We came from pause menu, return to pause menu
+            PauseMenu.SetActive(true);
+            Debug.Log("MenuManager: Returning to Pause Menu from Settings");
+        }
+        else
+        {
+            // No valid menu to return to, default to main menu if available
+            if (mainMenuExists)
+            {
+                MainMenu.SetActive(true);
+                Debug.Log("MenuManager: Defaulting to Main Menu from Settings");
+            }
+        }
+        
         isSubMenuOpen = false; // Mark that no sub-menu is open
     }
     public void OpenVideoMenu()
     {
-        VideoMenu.SetActive(true); // Show the video menu
-        PauseMenu.SetActive(false); // Hide the pause menu
+        if (VideoMenu != null) VideoMenu.SetActive(true); // Show the video menu
+        if (PauseMenu != null) PauseMenu.SetActive(false); // Hide the pause menu
         isSubMenuOpen = true; // Mark that a sub-menu is open
     }
     public void CloseVideoMenu()
     {
-        VideoMenu.SetActive(false); // Hide the video menu
-        PauseMenu.SetActive(true); // Show the pause menu
+        if (VideoMenu != null) VideoMenu.SetActive(false); // Hide the video menu
+        if (PauseMenu != null) PauseMenu.SetActive(true); // Show the pause menu
         isSubMenuOpen = false; // Mark that no sub-menu is open
     }
     public void OpenExitConfirmationModal()
     {
-        ExitMenu.SetActive(true); // Show the exit confirmation modal
+        if (ExitMenu != null) ExitMenu.SetActive(true); // Show the exit confirmation modal
     }
     public void CloseExitConfirmationModal()
     {
-        ExitMenu.SetActive(false); // Hide the exit confirmation modal
+        if (ExitMenu != null) ExitMenu.SetActive(false); // Hide the exit confirmation modal
         isSubMenuOpen = false; // Mark that no sub-menu is open
     }
     public void QuitGame()
@@ -445,6 +976,8 @@ public class MenuManager : MonoBehaviour
         return (PauseMenu != null && PauseMenu.transform.IsChildOf(canvasTransform)) ||
                (SoundMenu != null && SoundMenu.transform.IsChildOf(canvasTransform)) ||
                (VideoMenu != null && VideoMenu.transform.IsChildOf(canvasTransform)) ||
+               (SettingsMenu != null && SettingsMenu.transform.IsChildOf(canvasTransform)) ||
+               (CreditsMenu != null && CreditsMenu.transform.IsChildOf(canvasTransform)) ||
                (ExitMenu != null && ExitMenu.transform.IsChildOf(canvasTransform)) ||
                (MainMenu != null && MainMenu.transform.IsChildOf(canvasTransform));
     }
@@ -519,6 +1052,8 @@ public class MenuManager : MonoBehaviour
         return (PauseMenu != null && buttonTransform.IsChildOf(PauseMenu.transform)) ||
                (SoundMenu != null && buttonTransform.IsChildOf(SoundMenu.transform)) ||
                (VideoMenu != null && buttonTransform.IsChildOf(VideoMenu.transform)) ||
+               (SettingsMenu != null && buttonTransform.IsChildOf(SettingsMenu.transform)) ||
+               (CreditsMenu != null && buttonTransform.IsChildOf(CreditsMenu.transform)) ||
                (ExitMenu != null && buttonTransform.IsChildOf(ExitMenu.transform)) ||
                (MainMenu != null && buttonTransform.IsChildOf(MainMenu.transform));
     }

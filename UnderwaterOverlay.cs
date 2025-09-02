@@ -18,6 +18,56 @@ public class UnderwaterOverlay : MonoBehaviour
         boxCollider = GetComponent<BoxCollider>();
         if (!boxCollider.isTrigger)
             boxCollider.isTrigger = true;
+            
+        // Auto-find player head (WaterLevel on CharModel1)
+        FindPlayerHead();
+    }
+    
+    private void FindPlayerHead()
+    {
+        if (playerHead == null)
+        {
+            // Look for CharModel1 first
+            GameObject charModel = GameObject.Find("CharModel1");
+            if (charModel != null)
+            {
+                // Look for WaterLevel child object
+                Transform waterLevel = charModel.transform.Find("WaterLevel");
+                if (waterLevel != null)
+                {
+                    playerHead = waterLevel;
+                    Debug.Log("UnderwaterOverlay: Auto-found WaterLevel on CharModel1");
+                }
+                else
+                {
+                    Debug.LogWarning("UnderwaterOverlay: CharModel1 found but no WaterLevel child object");
+                }
+            }
+            else
+            {
+                // Fallback: look for any GameObject named WaterLevel
+                GameObject waterLevelObj = GameObject.Find("WaterLevel");
+                if (waterLevelObj != null)
+                {
+                    playerHead = waterLevelObj.transform;
+                    Debug.Log("UnderwaterOverlay: Auto-found WaterLevel object");
+                }
+                else
+                {
+                    Debug.LogWarning("UnderwaterOverlay: Could not find CharModel1 or WaterLevel");
+                }
+            }
+        }
+    }
+
+    private void Start()
+    {
+        // Double-check player head in case it wasn't available during Awake
+        if (playerHead == null)
+        {
+            Debug.Log("UnderwaterOverlay: Re-checking for player head in Start()");
+            FindPlayerHead();
+        }
     }
 
     private void Update()

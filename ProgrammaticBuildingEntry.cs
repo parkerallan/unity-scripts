@@ -83,6 +83,43 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
     }
     
     /// <summary>
+    /// Load a scene without requiring a player reference (useful for new games)
+    /// The scene should have its own player GameObject that will be positioned at the spawn point
+    /// </summary>
+    /// <param name="sceneToLoad">Name of the scene to load</param>
+    /// <param name="spawnPointName">Optional specific spawn point name. If null, will search for "SpawnPoint" tag</param>
+    public void LoadScene(string sceneToLoad, string spawnPointName = null)
+    {
+        if (string.IsNullOrEmpty(sceneToLoad))
+        {
+            Debug.LogError("ProgrammaticBuildingEntry: Scene name cannot be null or empty!");
+            return;
+        }
+        
+        if (enableDebugLogs)
+            Debug.Log($"ProgrammaticBuildingEntry: Loading scene - Scene: {sceneToLoad}, Spawn Point: {spawnPointName ?? "Default"}");
+        
+        // Store spawn point name for the scene loaded callback
+        _targetSpawnPointName = spawnPointName;
+        _useSpecificPosition = false;
+        
+        // Show the overlay immediately
+        try
+        {
+            SceneTransitionOverlay.Instance?.ShowOverlay();
+        }
+        catch (System.Exception e)
+        {
+            if (enableDebugLogs)
+                Debug.LogWarning($"ProgrammaticBuildingEntry: Could not show overlay: {e.Message}");
+        }
+        
+        // Subscribe to the sceneLoaded event and load the scene
+        SceneManager.sceneLoaded += OnSceneLoadedForNewPlayer;
+        SceneManager.LoadScene(sceneToLoad);
+    }
+    
+    /// <summary>
     /// Enter a building with a specific position and rotation (useful for precise positioning)
     /// </summary>
     /// <param name="sceneToLoad">Name of the scene to load</param>
@@ -255,6 +292,66 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         _targetSpawnPointName = null;
     }
     
+    private void OnSceneLoadedForNewPlayer(Scene scene, LoadSceneMode mode)
+    {
+        // Unsubscribe from the sceneLoaded event
+        SceneManager.sceneLoaded -= OnSceneLoadedForNewPlayer;
+        
+        if (enableDebugLogs)
+            Debug.Log($"ProgrammaticBuildingEntry: Scene {scene.name} loaded for new player");
+        
+        // Find the player in the new scene
+        GameObject scenePlayer = GameObject.FindWithTag("Player");
+        if (scenePlayer != null)
+        {
+            if (enableDebugLogs)
+                Debug.Log($"ProgrammaticBuildingEntry: Found player in scene: {scenePlayer.name}");
+            
+            // Find and use a spawn point to position the scene's player
+            Transform spawnPoint = FindSpawnPoint();
+            if (spawnPoint != null)
+            {
+                SetPlayerPositionForNewScene(scenePlayer, spawnPoint.position, spawnPoint.rotation);
+                if (enableDebugLogs)
+                    Debug.Log($"ProgrammaticBuildingEntry: Player positioned at spawn point: {spawnPoint.name}");
+            }
+            else
+            {
+                string searchTerm = !string.IsNullOrEmpty(_targetSpawnPointName) ? $"named '{_targetSpawnPointName}'" : "with 'SpawnPoint' tag";
+                Debug.LogWarning($"ProgrammaticBuildingEntry: No spawn point found {searchTerm} in scene '{scene.name}'. Player will remain at default position.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"ProgrammaticBuildingEntry: No player found in scene '{scene.name}' with 'Player' tag");
+        }
+        
+        // Notify GameManager that we've entered a new scene
+        GameManager gameManager = Object.FindAnyObjectByType<GameManager>();
+        if (gameManager != null)
+        {
+            gameManager.OnSceneEntered();
+        }
+        else if (enableDebugLogs)
+        {
+            Debug.LogWarning("ProgrammaticBuildingEntry: GameManager not found to notify of scene entry");
+        }
+        
+        // Hide the overlay
+        try
+        {
+            SceneTransitionOverlay.Instance?.HideOverlay();
+        }
+        catch (System.Exception e)
+        {
+            if (enableDebugLogs)
+                Debug.LogWarning($"ProgrammaticBuildingEntry: Could not hide overlay: {e.Message}");
+        }
+        
+        // Reset spawn point name for next use
+        _targetSpawnPointName = null;
+    }
+    
     private Transform FindSpawnPoint()
     {
         // If a specific spawn point name is provided, search for it
@@ -307,6 +404,38 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
             if (enableDebugLogs)
                 Debug.Log($"ProgrammaticBuildingEntry: No CharModel1 found, positioned player directly");
         }
+    }
+    
+    /// <summary>
+    /// Helper method to set player position in a new scene (handles CharacterController)
+    /// </summary>
+    /// <param name="player">The player GameObject to position</param>
+    /// <param name="position">Target position</param>
+    /// <param name="rotation">Target rotation</param>
+    private void SetPlayerPositionForNewScene(GameObject player, Vector3 position, Quaternion rotation)
+    {
+        CharacterController characterController = player.GetComponent<CharacterController>();
+        if (characterController != null)
+        {
+            // Disable CharacterController before positioning to avoid conflicts
+            characterController.enabled = false;
+            player.transform.SetPositionAndRotation(position, rotation);
+            characterController.enabled = true;
+            
+            if (enableDebugLogs)
+                Debug.Log($"ProgrammaticBuildingEntry: Player positioned with CharacterController handling");
+        }
+        else
+        {
+            // No CharacterController, position directly
+            player.transform.SetPositionAndRotation(position, rotation);
+            
+            if (enableDebugLogs)
+                Debug.Log($"ProgrammaticBuildingEntry: Player positioned directly (no CharacterController)");
+        }
+        
+        if (enableDebugLogs)
+            Debug.Log($"ProgrammaticBuildingEntry: Player positioned at {position} with rotation {rotation}");
     }
 
     // ===============================

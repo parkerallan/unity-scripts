@@ -35,14 +35,24 @@ public class SceneTransitionOverlay : MonoBehaviour
         {
             if (_instance == null)
             {
+                Debug.Log("SceneTransitionOverlay: Instance is null, attempting to find or create...");
+                
                 // Try to find existing instance first
                 _instance = FindFirstObjectByType<SceneTransitionOverlay>();
                 if (_instance == null)
                 {
+                    Debug.Log("SceneTransitionOverlay: No existing instance found, creating new one...");
+                    
                     // Create new instance only if none exists
                     GameObject overlayObj = new GameObject("SceneTransitionOverlay");
                     _instance = overlayObj.AddComponent<SceneTransitionOverlay>();
                     DontDestroyOnLoad(overlayObj);
+                    
+                    Debug.Log($"SceneTransitionOverlay: Created new instance - GameObject: {overlayObj.name}");
+                }
+                else
+                {
+                    Debug.Log($"SceneTransitionOverlay: Found existing instance - GameObject: {_instance.gameObject.name}");
                 }
             }
             return _instance;
@@ -88,27 +98,35 @@ public class SceneTransitionOverlay : MonoBehaviour
     /// </summary>
     private void CreateOrFindLoadingCanvas()
     {
+        Debug.Log("SceneTransitionOverlay: CreateOrFindLoadingCanvas called");
+        
         // First try to find existing custom loading canvas in current scene
         if (enableCustomLoadingUI)
         {
+            Debug.Log("SceneTransitionOverlay: Looking for custom loading UI...");
             FindAndActivateCustomLoadingUI();
             if (_customLoadingCanvas != null)
             {
+                Debug.Log("SceneTransitionOverlay: Using custom loading canvas");
                 return; // Found existing canvas, we're done
+            }
+            else
+            {
+                Debug.Log("SceneTransitionOverlay: No custom loading canvas found");
             }
         }
         
         // If no custom canvas found, create a simple overlay that persists
         if (_createdOverlayCanvas == null)
         {
+            Debug.Log("SceneTransitionOverlay: Creating new persistent overlay...");
             CreatePersistentOverlay();
         }
         else
         {
             // Reactivate existing persistent overlay
             _createdOverlayCanvas.SetActive(true);
-            if (enableDebugLogs)
-                Debug.Log("SceneTransitionOverlay: Reactivated persistent overlay canvas");
+            Debug.Log("SceneTransitionOverlay: Reactivated existing persistent overlay canvas");
         }
     }
     
@@ -117,17 +135,20 @@ public class SceneTransitionOverlay : MonoBehaviour
     /// </summary>
     private void CreatePersistentOverlay()
     {
-        if (enableDebugLogs)
-            Debug.Log("SceneTransitionOverlay: Creating persistent overlay canvas");
+        Debug.Log("SceneTransitionOverlay: CreatePersistentOverlay starting...");
             
         // Create main canvas GameObject
         _createdOverlayCanvas = new GameObject("PersistentLoadingCanvas");
         DontDestroyOnLoad(_createdOverlayCanvas);
         
+        Debug.Log($"SceneTransitionOverlay: Created canvas GameObject: {_createdOverlayCanvas.name}");
+        
         // Add and configure Canvas component
         Canvas canvas = _createdOverlayCanvas.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 1000;
+        
+        Debug.Log($"SceneTransitionOverlay: Canvas component added with sorting order: {canvas.sortingOrder}");
         
         // Add CanvasScaler for proper UI scaling
         CanvasScaler scaler = _createdOverlayCanvas.AddComponent<CanvasScaler>();
@@ -151,13 +172,31 @@ public class SceneTransitionOverlay : MonoBehaviour
         backgroundRect.sizeDelta = Vector2.zero;
         backgroundRect.anchoredPosition = Vector2.zero;
         
+        Debug.Log("SceneTransitionOverlay: Background image created and configured");
+        
         // Create loading text
         GameObject loadingTextObj = new GameObject("LoadingText");
         loadingTextObj.transform.SetParent(_createdOverlayCanvas.transform, false);
         
         Text loadingText = loadingTextObj.AddComponent<Text>();
         loadingText.text = "Loading...";
-        loadingText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        
+        // Try to load the legacy runtime font, with fallback
+        Font loadingFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (loadingFont == null)
+        {
+            // Fallback to default font if LegacyRuntime.ttf fails
+            loadingFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            Debug.LogWarning("SceneTransitionOverlay: LegacyRuntime.ttf not found, falling back to Arial.ttf");
+        }
+        if (loadingFont == null)
+        {
+            // Last resort fallback
+            loadingFont = Resources.FindObjectsOfTypeAll<Font>()[0];
+            Debug.LogWarning("SceneTransitionOverlay: Using fallback font: " + (loadingFont ? loadingFont.name : "null"));
+        }
+        
+        loadingText.font = loadingFont;
         loadingText.fontSize = 48;
         loadingText.color = Color.white;
         loadingText.alignment = TextAnchor.MiddleCenter;
@@ -169,6 +208,8 @@ public class SceneTransitionOverlay : MonoBehaviour
         textRect.anchoredPosition = Vector2.zero;
         textRect.sizeDelta = new Vector2(400, 100);
         
+        Debug.Log("SceneTransitionOverlay: Loading text created and positioned");
+        
         // Add simple animation to loading text
         Animator textAnimator = loadingTextObj.AddComponent<Animator>();
         textAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
@@ -178,8 +219,7 @@ public class SceneTransitionOverlay : MonoBehaviour
         
         _createdOverlayCanvas.SetActive(true);
         
-        if (enableDebugLogs)
-            Debug.Log("SceneTransitionOverlay: Created persistent overlay with loading text");
+        Debug.Log($"SceneTransitionOverlay: Persistent overlay created and activated. Canvas active: {_createdOverlayCanvas.activeSelf}");
     }
     
     /// <summary>
@@ -366,8 +406,8 @@ public class SceneTransitionOverlay : MonoBehaviour
     /// </summary>
     public void ShowOverlay()
     {
-        if (enableDebugLogs)
-            Debug.Log("SceneTransitionOverlay: ShowOverlay called");
+        Debug.Log("SceneTransitionOverlay: ShowOverlay called");
+        Debug.Log($"SceneTransitionOverlay: Current state - _isShowing: {_isShowing}, GameObject: {gameObject.name}");
             
         _isShowing = true;
         _showStartTime = Time.unscaledTime; // Use unscaled time for accurate tracking during scene loading
@@ -378,16 +418,19 @@ public class SceneTransitionOverlay : MonoBehaviour
         if (_hideCoroutine != null)
         {
             StopCoroutine(_hideCoroutine);
+            Debug.Log("SceneTransitionOverlay: Stopped existing hide coroutine");
         }
         
         // Create or activate the LoadingCanvas BEFORE scene transition
+        Debug.Log("SceneTransitionOverlay: Calling CreateOrFindLoadingCanvas...");
         CreateOrFindLoadingCanvas();
         
         // Start minimum time tracker using unscaled time
         _hideCoroutine = StartCoroutine(MinimumTimeTracker());
         
-        if (enableDebugLogs)
-            Debug.Log($"SceneTransitionOverlay: LoadingCanvas shown - will hide after minimum {minimumShowTime}s AND scene load completes");
+        Debug.Log($"SceneTransitionOverlay: LoadingCanvas shown - will hide after minimum {minimumShowTime}s AND scene load completes");
+        Debug.Log($"SceneTransitionOverlay: Custom canvas active: {(_customLoadingCanvas != null && _customLoadingCanvas.activeSelf)}");
+        Debug.Log($"SceneTransitionOverlay: Created canvas active: {(_createdOverlayCanvas != null && _createdOverlayCanvas.activeSelf)}");
     }
     
     private System.Collections.IEnumerator MinimumTimeTracker()

@@ -50,6 +50,56 @@ public class UnderwaterPlayerController : MonoBehaviour
             waterSurfaceY = boxCollider.bounds.max.y;
         }
         
+        // Auto-find player components if not assigned
+        FindPlayerComponents();
+    }
+    
+    private void FindPlayerComponents()
+    {
+        // Auto-find player animator if not assigned
+        if (playerAnimator == null)
+        {
+            // Look for CharModel1 specifically
+            GameObject charModel = GameObject.Find("CharModel1");
+            if (charModel != null)
+            {
+                playerAnimator = charModel.GetComponent<Animator>();
+                Debug.Log("UnderwaterPlayerController: Auto-found CharModel1 Animator");
+            }
+            else
+            {
+                // Fallback to finding any player with Animator
+                GameObject player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null)
+                {
+                    playerAnimator = player.GetComponentInChildren<Animator>();
+                    Debug.Log("UnderwaterPlayerController: Auto-found Player Animator");
+                }
+            }
+        }
+        
+        // Auto-find player chest/transform if not assigned
+        if (playerChest == null)
+        {
+            // Look for CharModel1 first
+            GameObject charModel = GameObject.Find("CharModel1");
+            if (charModel != null)
+            {
+                playerChest = charModel.transform;
+                Debug.Log("UnderwaterPlayerController: Auto-found CharModel1 transform");
+            }
+            else
+            {
+                // Fallback to finding player by tag
+                GameObject player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null)
+                {
+                    playerChest = player.transform;
+                    Debug.Log("UnderwaterPlayerController: Auto-found Player transform");
+                }
+            }
+        }
+        
         // Get the player's rigidbody for floating physics
         if (playerChest != null)
         {
@@ -65,7 +115,26 @@ public class UnderwaterPlayerController : MonoBehaviour
             {
                 originalDrag = playerRigidbody.linearDamping;
                 originalAngularDrag = playerRigidbody.angularDamping;
+                Debug.Log("UnderwaterPlayerController: Found player Rigidbody and stored original physics settings");
             }
+            else
+            {
+                Debug.LogWarning("UnderwaterPlayerController: Could not find player Rigidbody");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("UnderwaterPlayerController: Could not find player chest/transform");
+        }
+    }
+
+    private void Start()
+    {
+        // Double-check player components in case they weren't available during Awake
+        if (playerAnimator == null || playerChest == null)
+        {
+            Debug.Log("UnderwaterPlayerController: Re-checking for player components in Start()");
+            FindPlayerComponents();
         }
     }
 
