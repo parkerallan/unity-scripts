@@ -72,6 +72,9 @@ public class SaveManager : MonoBehaviour
     public string saveFileName = "gamesave.json";
     public bool enableDebugLogs = true;
     
+    [Header("Player Prefab")]
+    public GameObject playerPrefab; // Player prefab to instantiate if no player exists
+    
     [Header("Auto-Save")]
     public bool autoSaveEnabled = true;
     public float autoSaveInterval = 300f; // Auto-save every 5 minutes
@@ -361,111 +364,36 @@ public class SaveManager : MonoBehaviour
     /// </summary>
     private void ApplyGameData(SaveData saveData)
     {
-        // Show the transition overlay immediately when starting load process
-        try
-        {
-            if (SceneTransitionOverlay.Instance != null)
-            {
-                SceneTransitionOverlay.Instance.ShowOverlay();
-                if (enableDebugLogs)
-                    Debug.Log("SaveManager: Transition overlay shown for load process");
-            }
-        }
-        catch (System.Exception e)
-        {
-            if (enableDebugLogs)
-                Debug.LogWarning($"SaveManager: Could not show transition overlay: {e.Message}");
-        }
-        
         // Load the correct scene if different from current
         string currentScene = SceneManager.GetActiveScene().name;
         if (currentScene != saveData.currentScene)
         {
-            if (enableDebugLogs)
-                Debug.Log($"SaveManager: Loading scene {saveData.currentScene}");
-            
-            // Use ProgrammaticBuildingEntry to load scene with proper positioning
-            ProgrammaticBuildingEntry buildingEntry = FindAnyObjectByType<ProgrammaticBuildingEntry>();
-            if (buildingEntry != null)
-            {
-                // Store save data to apply after scene loads
-                StartCoroutine(LoadSceneAndApplyData(saveData));
-                return;
-            }
-            else
-            {
-                // Fallback to direct scene loading
-                SceneManager.sceneLoaded += (scene, mode) => OnSceneLoadedApplyData(saveData);
-                SceneManager.LoadScene(saveData.currentScene);
-                return;
-            }
+            // Subscribe to scene loaded event and load the scene
+            SceneManager.sceneLoaded += (scene, mode) => OnSceneLoadedForSave(saveData);
+            SceneManager.LoadScene(saveData.currentScene);
+            return;
         }
         
         // Apply data in current scene
         ApplyDataToCurrentScene(saveData);
     }
     
-    /// <summary>
-    /// Load scene and apply save data
-    /// </summary>
-    private System.Collections.IEnumerator LoadSceneAndApplyData(SaveData saveData)
+    private void OnSceneLoadedForSave(SaveData saveData)
     {
-        if (enableDebugLogs)
-            Debug.Log($"SaveManager: Starting scene transition to {saveData.currentScene}");
+        // Unsubscribe from event
+        SceneManager.sceneLoaded -= (scene, mode) => OnSceneLoadedForSave(saveData);
         
-        // Load the scene using ProgrammaticBuildingEntry (which will also show overlay)
-        ProgrammaticBuildingEntry buildingEntry = FindAnyObjectByType<ProgrammaticBuildingEntry>();
-        if (buildingEntry != null)
-        {
-            // Note: LoadScene will show its own overlay, but we already showed one
-            // This ensures the overlay is visible throughout the entire process
-            buildingEntry.LoadScene(saveData.currentScene);
-        }
-        else
-        {
-            // Fallback: direct scene loading
-            SceneManager.LoadScene(saveData.currentScene);
-        }
-        
-        // Wait longer for scene to fully load and initialize
-        yield return new WaitForSeconds(2f);
-        
-        if (enableDebugLogs)
-            Debug.Log("SaveManager: Scene loaded, applying save data...");
-        
-        // Apply the saved data
-        ApplyDataToCurrentScene(saveData);
-        
-        // Additional wait to ensure everything is properly set up
-        yield return new WaitForSeconds(0.5f);
-        
-        // Final cleanup to ensure proper state
-        SetGameStateAfterLoad();
-        
-        if (enableDebugLogs)
-            Debug.Log("SaveManager: Load process completed");
+        // Apply the save data to the newly loaded scene
+        StartCoroutine(ApplyDataAfterSceneLoad(saveData));
     }
     
-    /// <summary>
-    /// Callback for when scene loads during game loading
-    /// </summary>
-    private void OnSceneLoadedApplyData(SaveData saveData)
+    private System.Collections.IEnumerator ApplyDataAfterSceneLoad(SaveData saveData)
     {
-        SceneManager.sceneLoaded -= (scene, mode) => OnSceneLoadedApplyData(saveData);
-        
-        // Wait a frame for scene initialization
-        StartCoroutine(DelayedApplyData(saveData));
-    }
-    
-    private System.Collections.IEnumerator DelayedApplyData(SaveData saveData)
-    {
-        yield return null; // Wait one frame
-        yield return new WaitForSeconds(1f); // Wait additional time for scene setup
+        // Wait for scene to initialize
+        yield return new WaitForEndOfFrame();
+        yield return new WaitForEndOfFrame();
         
         ApplyDataToCurrentScene(saveData);
-        
-        // Additional cleanup
-        yield return new WaitForSeconds(0.5f);
         SetGameStateAfterLoad();
     }
     
@@ -474,15 +402,19 @@ public class SaveManager : MonoBehaviour
     /// </summary>
     private void ApplyDataToCurrentScene(SaveData saveData)
     {
-        // Find player in the loaded scene
         GameObject player = GameObject.FindWithTag("Player");
+        
+        // If no player exists in the scene, create one from prefab
+        if (player == null)
+        {
+            player = CreatePlayerInScene(saveData);
+        }
+        
         if (player != null)
         {
-            // Apply player position and rotation
             Vector3 loadPosition = new Vector3(saveData.playerPosX, saveData.playerPosY, saveData.playerPosZ);
             Quaternion loadRotation = Quaternion.Euler(0, saveData.playerRotY, 0);
             
-            // Handle CharacterController positioning
             CharacterController characterController = player.GetComponent<CharacterController>();
             if (characterController != null)
             {
@@ -495,21 +427,12 @@ public class SaveManager : MonoBehaviour
                 player.transform.SetPositionAndRotation(loadPosition, loadRotation);
             }
             
-            if (enableDebugLogs)
-                Debug.Log($"SaveManager: Player positioned at {loadPosition}");
-            
-            // Apply player health
             Target playerTarget = player.GetComponent<Target>();
             if (playerTarget != null)
             {
                 playerTarget.health = saveData.playerHealth;
-                // Note: maxHealth is set in Start(), so we don't override it here
-                
-                if (enableDebugLogs)
-                    Debug.Log($"SaveManager: Player health set to {saveData.playerHealth}");
             }
             
-            // Apply weapon data
             if (saveData.hasGun)
             {
                 GunScript gunScript = player.GetComponent<GunScript>();
@@ -523,9 +446,6 @@ public class SaveManager : MonoBehaviour
                     {
                         gunScript.ActivateGun();
                     }
-                    
-                    if (enableDebugLogs)
-                        Debug.Log($"SaveManager: Gun ammo set to {saveData.gunCurrentAmmo}/{saveData.gunReserveAmmo}");
                 }
             }
             
@@ -542,22 +462,93 @@ public class SaveManager : MonoBehaviour
                     {
                         rifleScript.ActivateRifle();
                     }
-                    
-                    if (enableDebugLogs)
-                        Debug.Log($"SaveManager: Rifle ammo set to {saveData.rifleCurrentAmmo}/{saveData.rifleReserveAmmo}");
                 }
             }
         }
         else
         {
-            Debug.LogError("SaveManager: Player not found in loaded scene");
+            Debug.LogError("SaveManager: Failed to create or find player object for loading save data!");
         }
         
-        // Ensure proper game state after loading
         SetGameStateAfterLoad();
+    }
+    
+    /// <summary>
+    /// Create a player object in the current scene from the prefab
+    /// </summary>
+    /// <param name="saveData">Save data to determine spawn position</param>
+    /// <returns>The created player GameObject, or null if failed</returns>
+    private GameObject CreatePlayerInScene(SaveData saveData)
+    {
+        if (playerPrefab == null)
+        {
+            Debug.LogError("SaveManager: No player prefab assigned! Cannot create player for loading save.");
+            return null;
+        }
         
+        try
+        {
+            // Try to find a spawn point in the current scene first
+            Vector3 spawnPosition = FindBestSpawnPosition(saveData);
+            Quaternion spawnRotation = Quaternion.Euler(0, saveData.playerRotY, 0);
+            
+            GameObject newPlayer = Instantiate(playerPrefab, spawnPosition, spawnRotation);
+            
+            // Make sure it has the Player tag
+            if (!newPlayer.CompareTag("Player"))
+            {
+                newPlayer.tag = "Player";
+            }
+            
+            if (enableDebugLogs)
+            {
+                Debug.Log($"SaveManager: Created player object at position ({spawnPosition.x:F2}, {spawnPosition.y:F2}, {spawnPosition.z:F2})");
+            }
+            
+            return newPlayer;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"SaveManager: Failed to create player object - {e.Message}");
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Find the best spawn position for the player in the current scene
+    /// </summary>
+    /// <param name="saveData">Save data with original position</param>
+    /// <returns>The best spawn position</returns>
+    private Vector3 FindBestSpawnPosition(SaveData saveData)
+    {
+        // First try to use saved position
+        Vector3 savedPosition = new Vector3(saveData.playerPosX, saveData.playerPosY, saveData.playerPosZ);
+        
+        // Look for spawn points in the scene
+        GameObject spawnPoint = GameObject.FindWithTag("SpawnPoint");
+        if (spawnPoint != null)
+        {
+            if (enableDebugLogs)
+                Debug.Log("SaveManager: Using SpawnPoint for player creation");
+            return spawnPoint.transform.position;
+        }
+        
+        // Look for any object named "PlayerSpawn" or similar
+        GameObject[] allObjects = FindObjectsOfType<GameObject>();
+        foreach (GameObject obj in allObjects)
+        {
+            if (obj.name.ToLower().Contains("spawn") || obj.name.ToLower().Contains("start"))
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"SaveManager: Using {obj.name} for player spawn");
+                return obj.transform.position;
+            }
+        }
+        
+        // If no spawn points found, use the saved position
         if (enableDebugLogs)
-            Debug.Log($"SaveManager: Game state applied successfully in scene {saveData.currentScene}");
+            Debug.Log("SaveManager: No spawn points found, using saved position");
+        return savedPosition;
     }
     
     /// <summary>
@@ -565,85 +556,53 @@ public class SaveManager : MonoBehaviour
     /// </summary>
     private void SetGameStateAfterLoad()
     {
-        // Hide any transition overlays
+        Time.timeScale = 1f;
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+        
+        // Hide any scene transition overlays
         try
         {
             if (SceneTransitionOverlay.Instance != null)
             {
                 SceneTransitionOverlay.Instance.HideOverlay();
-                SceneTransitionOverlay.Instance.ForceHideOverlay();
             }
         }
         catch (System.Exception e)
         {
-            if (enableDebugLogs)
-                Debug.LogWarning($"SaveManager: Could not hide overlay: {e.Message}");
+            Debug.LogWarning($"SaveManager: Could not hide overlay: {e.Message}");
         }
         
-        // Set proper game state (resumed, not paused)
-        Time.timeScale = 1f;
-        
-        // Set proper cursor state for gameplay
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
-        
-        // Find and configure MenuManager for proper game state
+        // Handle MenuManager properly to ensure player controls are enabled
         MenuManager menuManager = FindAnyObjectByType<MenuManager>();
         if (menuManager != null)
         {
-            // Hide all menus
+            // Close all menus and reset menu state
             if (menuManager.MainMenu != null) menuManager.MainMenu.SetActive(false);
             if (menuManager.PauseMenu != null) menuManager.PauseMenu.SetActive(false);
-            if (menuManager.SettingsMenu != null) menuManager.SettingsMenu.SetActive(false);
-            if (menuManager.CreditsMenu != null) menuManager.CreditsMenu.SetActive(false);
-            if (menuManager.SoundMenu != null) menuManager.SoundMenu.SetActive(false);
-            if (menuManager.VideoMenu != null) menuManager.VideoMenu.SetActive(false);
-            if (menuManager.ExitMenu != null) menuManager.ExitMenu.SetActive(false);
-            
-            // Reset submenu state
             menuManager.isSubMenuOpen = false;
             
-            // Force refresh UI components to prevent overlay issues
-            menuManager.RefreshUIComponents();
-            
-            if (enableDebugLogs)
-                Debug.Log("SaveManager: MenuManager state reset after load");
+            // Directly enable player controls using reflection since ClosePauseMenu doesn't work when menu is already hidden
+            try
+            {
+                var enableMethod = typeof(MenuManager).GetMethod("EnablePlayerControls", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (enableMethod != null)
+                {
+                    enableMethod.Invoke(menuManager, null);
+                    if (enableDebugLogs)
+                        Debug.Log("SaveManager: Player controls enabled via EnablePlayerControls method");
+                }
+                else
+                {
+                    Debug.LogWarning("SaveManager: Could not find EnablePlayerControls method");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"SaveManager: Could not enable player controls: {e.Message}");
+            }
         }
-        
-        // Enable player controls (in case they were disabled by menu system)
-        PlayerController playerController = FindAnyObjectByType<PlayerController>();
-        if (playerController != null)
-        {
-            playerController.enabled = true;
-        }
-        
-        UnderwaterPlayerController underwaterController = FindAnyObjectByType<UnderwaterPlayerController>();
-        if (underwaterController != null)
-        {
-            underwaterController.enabled = true;
-        }
-        
-        // Enable weapon scripts
-        GunScript gunScript = FindAnyObjectByType<GunScript>();
-        if (gunScript != null)
-        {
-            gunScript.enabled = true;
-        }
-        
-        RifleScript rifleScript = FindAnyObjectByType<RifleScript>();
-        if (rifleScript != null)
-        {
-            rifleScript.enabled = true;
-        }
-        
-        WeaponManager weaponManager = FindAnyObjectByType<WeaponManager>();
-        if (weaponManager != null)
-        {
-            weaponManager.enabled = true;
-        }
-        
-        if (enableDebugLogs)
-            Debug.Log("SaveManager: Game state properly set after load - ready for gameplay");
     }
     
     /// <summary>

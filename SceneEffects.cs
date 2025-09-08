@@ -300,6 +300,79 @@ public class SceneEffects : MonoBehaviour
     public Vector3[] newRotations = new Vector3[3];
     public Vector3[] newScales = new Vector3[3];
     
+    [Header("Teleport Settings")]
+    public ParticleSystem teleportEffect;
+    public AudioClip teleportSFX;
+    public float teleportDelay = 2f;
+    
+    [Header("Script Control Settings")]
+    public MonoBehaviour scriptToEnable;
+    
+    [Header("Block Removal Settings")]
+    public GameObject blockToRemove;
+    
+    public void Teleport(string sceneName, string spawnPointName)
+    {
+        StartCoroutine(TeleportSequence(sceneName, spawnPointName));
+    }
+    
+    private IEnumerator TeleportSequence(string sceneName, string spawnPointName)
+    {
+        Debug.Log($"SceneEffects: Starting teleport to {sceneName} at {spawnPointName}");
+        
+        // Play teleport particle effect
+        if (teleportEffect != null)
+        {
+            teleportEffect.Play();
+        }
+        
+        // Play teleport sound effect
+        if (teleportSFX != null && SFXManager.instance != null)
+        {
+            SFXManager.instance.PlaySFXClip(teleportSFX, transform, 1f);
+        }
+        
+        // Wait for specified delay
+        yield return new WaitForSeconds(teleportDelay);
+        
+        // Teleport to specified scene and spawn point
+        if (buildingEntry != null)
+        {
+            Debug.Log($"SceneEffects: Teleporting to scene {sceneName} at spawn point {spawnPointName}");
+            buildingEntry.EnterBuilding(sceneName, spawnPointName);
+        }
+        else
+        {
+            Debug.LogError("SceneEffects: No building entry - cannot teleport");
+        }
+    }
+    
+    public void EnableScript()
+    {
+        if (scriptToEnable != null)
+        {
+            scriptToEnable.enabled = true;
+            Debug.Log($"SceneEffects: Enabled script {scriptToEnable.GetType().Name}");
+        }
+        else
+        {
+            Debug.LogWarning("SceneEffects: No script assigned to enable!");
+        }
+    }
+    
+    public void RemoveBlock()
+    {
+        if (blockToRemove != null)
+        {
+            blockToRemove.SetActive(false);
+            Debug.Log($"SceneEffects: Disabled GameObject {blockToRemove.name}");
+        }
+        else
+        {
+            Debug.LogWarning("SceneEffects: No GameObject assigned to remove!");
+        }
+    }
+    
     public void BombTheGates()
     {
         StartCoroutine(BombTheGatesSequence());

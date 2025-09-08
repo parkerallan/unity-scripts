@@ -9,6 +9,12 @@ public class BuildingEnterTrigger : MonoBehaviour
     public bool isPlayerInRange = false; // Track if the player is in range
     public GameObject player; // Reference to the player GameObject
 
+    private void OnEnable()
+    {
+        // When the component is re-enabled, check if player is still in trigger zone
+        RefreshPlayerInRange();
+    }
+
     private void Update()
     {
         // Check if the player is in range and presses the "E" key
@@ -48,6 +54,50 @@ public class BuildingEnterTrigger : MonoBehaviour
             {
                 markerEffect.SetActive(false);
             }
+        }
+    }
+
+    /// <summary>
+    /// Refresh the player in range state - useful when component is re-enabled
+    /// </summary>
+    private void RefreshPlayerInRange()
+    {
+        // Find all colliders currently in the trigger zone
+        Collider triggerCollider = GetComponent<Collider>();
+        if (triggerCollider != null)
+        {
+            // Get all colliders overlapping with this trigger
+            Collider[] overlappingColliders = Physics.OverlapBox(
+                triggerCollider.bounds.center,
+                triggerCollider.bounds.extents,
+                triggerCollider.transform.rotation
+            );
+
+            // Check if any of them is the player
+            foreach (Collider col in overlappingColliders)
+            {
+                if (col.CompareTag("Player"))
+                {
+                    isPlayerInRange = true;
+                    player = col.gameObject;
+                    Debug.Log("BuildingEnterTrigger: Player found in range after refresh");
+                    
+                    // Activate the particle effect
+                    if (markerEffect != null)
+                    {
+                        markerEffect.SetActive(true);
+                    }
+                    return;
+                }
+            }
+        }
+        
+        // No player found in range
+        isPlayerInRange = false;
+        player = null;
+        if (markerEffect != null)
+        {
+            markerEffect.SetActive(false);
         }
     }
 

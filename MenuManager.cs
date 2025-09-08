@@ -513,10 +513,27 @@ public class MenuManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         isSubMenuOpen = false;
         
+        // Re-enable player controls that may have been disabled by pause menu
+        EnablePlayerControls();
+        
+        // Wait additional frame and refresh building triggers specifically
+        yield return new WaitForSeconds(0.2f);
+        RefreshBuildingTriggers();
+        
         // Force refresh UI to clear any overlay issues
         RefreshUIComponents();
         
         Debug.Log("MenuManager: Post-load cleanup completed");
+    }
+    
+    private void RefreshBuildingTriggers()
+    {
+        BuildingEnterTrigger[] triggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
+        foreach (BuildingEnterTrigger trigger in triggers)
+        {
+            trigger.enabled = false;
+            trigger.enabled = true;
+        }
     }
     
     /// <summary>

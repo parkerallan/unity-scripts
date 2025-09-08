@@ -203,6 +203,14 @@ public class EnemyAIController : MonoBehaviour
         transform.LookAt(player);
     }
 
+    // Check line of sight before attacking
+    if (!HasLineOfSight())
+    {
+        // No clear shot - switch to chasing instead
+        ChasePlayer();
+        return;
+    }
+
     // Set shooting animation
     if (enemyAnimator != null)
     {
@@ -218,6 +226,25 @@ public class EnemyAIController : MonoBehaviour
         alreadyAttacked = true;
         Invoke(nameof(ResetAttack), timeBetweenAttacks);
     }
+  }
+  
+  private bool HasLineOfSight()
+  {
+    if (player == null) return false;
+    
+    Vector3 rayOrigin = transform.position + Vector3.up * 1.5f; // Enemy eye level
+    Vector3 directionToPlayer = (player.position + Vector3.up * 1.0f - rayOrigin).normalized; // Player chest level
+    float distanceToPlayer = Vector3.Distance(rayOrigin, player.position + Vector3.up * 1.0f);
+    
+    // Cast ray to check for obstacles
+    RaycastHit hit;
+    if (Physics.Raycast(rayOrigin, directionToPlayer, out hit, distanceToPlayer, ~whatIsPlayer))
+    {
+        // Something is blocking the view
+        return false;
+    }
+    
+    return true;
   }
   
   private void PerformRaycastAttack()

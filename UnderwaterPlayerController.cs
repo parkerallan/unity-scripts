@@ -59,21 +59,34 @@ public class UnderwaterPlayerController : MonoBehaviour
         // Auto-find player animator if not assigned
         if (playerAnimator == null)
         {
-            // Look for CharModel1 specifically
-            GameObject charModel = GameObject.Find("CharModel1");
-            if (charModel != null)
+            // First try to find CharModel1 anywhere in the scene hierarchy
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if (player != null)
             {
-                playerAnimator = charModel.GetComponent<Animator>();
-                Debug.Log("UnderwaterPlayerController: Auto-found CharModel1 Animator");
-            }
-            else
-            {
-                // Fallback to finding any player with Animator
-                GameObject player = GameObject.FindGameObjectWithTag("Player");
-                if (player != null)
+                // Search for CharModel1 in the player's children
+                Transform charModel = player.transform.Find("CharModel1");
+                if (charModel == null)
                 {
+                    // If not direct child, search recursively
+                    charModel = FindChildRecursive(player.transform, "CharModel1");
+                }
+                
+                if (charModel != null)
+                {
+                    playerAnimator = charModel.GetComponent<Animator>();
+                    if (playerAnimator != null)
+                    {
+                        Debug.Log("UnderwaterPlayerController: Assigned CharModel1 Animator to playerAnimator field");
+                    }
+                }
+                else
+                {
+                    // Try to get any animator from player
                     playerAnimator = player.GetComponentInChildren<Animator>();
-                    Debug.Log("UnderwaterPlayerController: Auto-found Player Animator");
+                    if (playerAnimator != null)
+                    {
+                        Debug.Log("UnderwaterPlayerController: Assigned Player Animator to playerAnimator field (fallback)");
+                    }
                 }
             }
         }
@@ -81,21 +94,31 @@ public class UnderwaterPlayerController : MonoBehaviour
         // Auto-find player chest/transform if not assigned
         if (playerChest == null)
         {
-            // Look for CharModel1 first
-            GameObject charModel = GameObject.Find("CharModel1");
-            if (charModel != null)
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if (player != null)
             {
-                playerChest = charModel.transform;
-                Debug.Log("UnderwaterPlayerController: Auto-found CharModel1 transform");
-            }
-            else
-            {
-                // Fallback to finding player by tag
-                GameObject player = GameObject.FindGameObjectWithTag("Player");
-                if (player != null)
+                // Look for WaterLevel object first (this is what we want for water detection)
+                Transform waterLevel = FindChildRecursive(player.transform, "WaterLevel");
+                if (waterLevel != null)
                 {
-                    playerChest = player.transform;
-                    Debug.Log("UnderwaterPlayerController: Auto-found Player transform");
+                    playerChest = waterLevel;
+                    Debug.Log("UnderwaterPlayerController: Assigned WaterLevel transform to playerChest field");
+                }
+                else
+                {
+                    // Fallback to CharModel1 if WaterLevel not found
+                    Transform charModel = FindChildRecursive(player.transform, "CharModel1");
+                    if (charModel != null)
+                    {
+                        playerChest = charModel;
+                        Debug.Log("UnderwaterPlayerController: Assigned CharModel1 transform to playerChest field");
+                    }
+                    else
+                    {
+                        // Final fallback to player root
+                        playerChest = player.transform;
+                        Debug.Log("UnderwaterPlayerController: Assigned Player root transform to playerChest field");
+                    }
                 }
             }
         }
@@ -126,6 +149,32 @@ public class UnderwaterPlayerController : MonoBehaviour
         {
             Debug.LogWarning("UnderwaterPlayerController: Could not find player chest/transform");
         }
+        
+        // Log final assignment status
+        Debug.Log($"UnderwaterPlayerController: Final assignments - playerAnimator: {(playerAnimator != null ? "ASSIGNED" : "NULL")}, playerChest: {(playerChest != null ? "ASSIGNED" : "NULL")}");
+    }
+    
+    /// <summary>
+    /// Recursively search for a child object by name
+    /// </summary>
+    private Transform FindChildRecursive(Transform parent, string childName)
+    {
+        // Check direct children first
+        foreach (Transform child in parent)
+        {
+            if (child.name == childName)
+                return child;
+        }
+        
+        // Search recursively in children
+        foreach (Transform child in parent)
+        {
+            Transform found = FindChildRecursive(child, childName);
+            if (found != null)
+                return found;
+        }
+        
+        return null;
     }
 
     private void Start()
@@ -140,6 +189,12 @@ public class UnderwaterPlayerController : MonoBehaviour
 
     private void Update()
     {
+        // Continuously try to find and assign missing components
+        if (playerAnimator == null || playerChest == null)
+        {
+            FindPlayerComponents();
+        }
+        
         if (playerAnimator == null || normalController == null || underwaterController == null || playerChest == null || boxCollider == null)
             return;
 
