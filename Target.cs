@@ -67,7 +67,7 @@ public class Target : MonoBehaviour
         if (isBoss)
         {
             isInvincible = true;
-            Debug.Log($"Boss {gameObject.name} initialized as invincible");
+           //Debug.Log($"Boss {gameObject.name} initialized as invincible");
         }
         
         // Get all renderers in this object and its children
@@ -142,11 +142,11 @@ public class Target : MonoBehaviour
         }
         
         // Log what we found for debugging
-        Debug.Log($"Target {gameObject.name}: Health bar references - " +
-                  $"UI: {(healthBarUI != null ? "Found" : "Missing")}, " +
-                  $"Slider: {(healthBarSlider != null ? "Found" : "Missing")}, " +
-                  $"Fill: {(healthBarFill != null ? "Found" : "Missing")}, " +
-                  $"NameText: {(targetNameText != null ? "Found" : "Missing")}");
+       //Debug.Log($"Target {gameObject.name}: Health bar references - " +
+                  //$"UI: {(healthBarUI != null ? "Found" : "Missing")}, " +
+                  //$"Slider: {(healthBarSlider != null ? "Found" : "Missing")}, " +
+                  //$"Fill: {(healthBarFill != null ? "Found" : "Missing")}, " +
+                  //$"NameText: {(targetNameText != null ? "Found" : "Missing")}");
     }
     
     void StoreOriginalColors()
@@ -171,7 +171,7 @@ public class Target : MonoBehaviour
         {
             if (isInvincible && isBoss)
             {
-                Debug.Log($"Boss {gameObject.name} is invincible - damage blocked");
+               //Debug.Log($"Boss {gameObject.name} is invincible - damage blocked");
             }
             return;
         }
@@ -221,7 +221,7 @@ public class Target : MonoBehaviour
         health = Mathf.Min(health + amount, maxHealth);
         float actualHealAmount = health - oldHealth;
         
-        Debug.Log($"Target {gameObject.name}: Health restored from {oldHealth} to {health} (+{actualHealAmount})");
+       //Debug.Log($"Target {gameObject.name}: Health restored from {oldHealth} to {health} (+{actualHealAmount})");
         
         // Update health bar for any target type
         UpdateHealthBar();
@@ -243,7 +243,7 @@ public class Target : MonoBehaviour
         if (isInvincible)
         {
             isInvincible = false;
-            Debug.Log($"Target {gameObject.name}: Invincibility disabled - can now take damage");
+           //Debug.Log($"Target {gameObject.name}: Invincibility disabled - can now take damage");
         }
     }
     
@@ -253,7 +253,7 @@ public class Target : MonoBehaviour
     public void EnableInvincibility()
     {
         isInvincible = true;
-        Debug.Log($"Target {gameObject.name}: Invincibility enabled - immune to damage");
+       //Debug.Log($"Target {gameObject.name}: Invincibility enabled - immune to damage");
     }
     
     /// <summary>
@@ -276,7 +276,7 @@ public class Target : MonoBehaviour
         health = maxHealth;
         float actualHealAmount = health - oldHealth;
         
-        Debug.Log($"Target {gameObject.name}: Fully healed from {oldHealth} to {health} (+{actualHealAmount})");
+       //Debug.Log($"Target {gameObject.name}: Fully healed from {oldHealth} to {health} (+{actualHealAmount})");
         
         // Update health bar for any target type
         UpdateHealthBar();
@@ -475,11 +475,11 @@ public class Target : MonoBehaviour
             // Destroy it after the specified lifetime
             Destroy(bloodSplatter, bloodSplatterLifetime);
             
-            Debug.Log($"Blood splatter spawned at {splatterPosition} for target {gameObject.name}");
+           //Debug.Log($"Blood splatter spawned at {splatterPosition} for target {gameObject.name}");
         }
         else
         {
-            Debug.LogWarning($"Could not find ground below target {gameObject.name} for blood splatter");
+           //Debug.LogWarning($"Could not find ground below target {gameObject.name} for blood splatter");
         }
     }
     
@@ -580,25 +580,25 @@ public class Target : MonoBehaviour
         // Invoke the death animation event - this can call any function from any script
         if (OnDeathAnimation != null)
         {
-            Debug.Log("Invoking death animation event");
+           //Debug.Log("Invoking death animation event");
             OnDeathAnimation.Invoke();
         }
         else
         {
-            Debug.LogWarning("No death animation event configured");
+           //Debug.LogWarning("No death animation event configured");
         }
     }
     
     void PlayVaporizeEffect()
     {
-        Debug.Log("Playing vaporize effect");
+       //Debug.Log("Playing vaporize effect");
         vaporizeEffect.transform.position = transform.position;
         vaporizeEffect.Play();
     }
     
     void PlayExplodeEffect()
     {
-        Debug.Log("Playing explode effect");
+       //Debug.Log("Playing explode effect");
         explodeEffect.transform.position = transform.position;
         explodeEffect.Play();
     }
@@ -632,7 +632,7 @@ public class Target : MonoBehaviour
         // Wait for effects to play
         yield return new WaitForSeconds(effectDelay);
         
-        Debug.Log($"Destroying target {gameObject.name}");
+       //Debug.Log($"Destroying target {gameObject.name}");
         Destroy(gameObject);
     }
 }

@@ -24,6 +24,10 @@ public class MenuManager : MonoBehaviour
 
     [Header("Save/Load System")]
     public SaveManager saveManager; // Reference to the save manager
+    public ProgrammaticDialogueTrigger dialogueTrigger; // Reference to dialogue trigger for new game
+    
+    // Static flag to track new game start
+    public static bool isNewGameStarting = false;
 
     //private bool isGameStarted = false;
 
@@ -365,12 +369,15 @@ public class MenuManager : MonoBehaviour
     {
         // Start a new game by transitioning to the bedroom scene
         Debug.Log("MenuManager: Starting new game - transitioning to Home scene at BedroomSpawnPoint");
-        
+
         if (buildingEntry != null)
         {
+            // Set flag to indicate new game is starting
+            isNewGameStarting = true;
+            
             // Hide the main menu before transitioning
             if (MainMenu != null) MainMenu.SetActive(false);
-            
+
             // Use LoadScene instead of EnterBuilding since there's no existing player in menu scene
             buildingEntry.LoadScene("Home", "BedroomSpawnPoint");
         }

@@ -198,9 +198,16 @@ public class EnemyAIController : MonoBehaviour
         agent.SetDestination(transform.position); // Stop moving
     }
 
+    // Only rotate horizontally (Y-axis) to face the player, don't tilt up/down
     if (player != null)
     {
-        transform.LookAt(player);
+        Vector3 directionToPlayer = (player.position - transform.position);
+        directionToPlayer.y = 0; // Remove vertical component to prevent tilting
+        
+        if (directionToPlayer != Vector3.zero)
+        {
+            transform.rotation = Quaternion.LookRotation(directionToPlayer);
+        }
     }
 
     // Check line of sight before attacking

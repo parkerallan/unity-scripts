@@ -25,19 +25,19 @@ public class ProgrammaticDialogueTrigger : MonoBehaviour
                 if (playerTransform == null)
                 {
                     playerTransform = foundPlayer.transform;
-                    Debug.Log($"ProgrammaticDialogueTrigger: Auto-assigned player: {foundPlayer.name}");
+                   //Debug.Log($"ProgrammaticDialogueTrigger: Auto-assigned player: {foundPlayer.name}");
                 }
                 // If we have a playerTransform but it's a scene-based duplicate, prefer the DontDestroyOnLoad one
                 else if (playerTransform.gameObject.scene.name != null && foundPlayer.scene.name == null)
                 {
                     playerTransform = foundPlayer.transform;
-                    Debug.Log($"ProgrammaticDialogueTrigger: Switched to DontDestroyOnLoad player: {foundPlayer.name}");
+                   //Debug.Log($"ProgrammaticDialogueTrigger: Switched to DontDestroyOnLoad player: {foundPlayer.name}");
                 }
             }
             
             if (playerTransform == null)
             {
-                Debug.LogWarning("ProgrammaticDialogueTrigger: No player GameObject found with 'Player' tag.");
+               //Debug.LogWarning("ProgrammaticDialogueTrigger: No player GameObject found with 'Player' tag.");
             }
         }
     }
@@ -68,19 +68,19 @@ public class ProgrammaticDialogueTrigger : MonoBehaviour
     {
         if (speakers.Length != sentences.Length)
         {
-            Debug.LogError("ProgrammaticDialogueTrigger: Speakers and sentences arrays must be the same length!");
+           //Debug.LogError("ProgrammaticDialogueTrigger: Speakers and sentences arrays must be the same length!");
             return;
         }
         
         if (characterImagePaths != null && characterImagePaths.Length != speakers.Length)
         {
-            Debug.LogError("ProgrammaticDialogueTrigger: Character images array must be the same length as speakers array!");
+           //Debug.LogError("ProgrammaticDialogueTrigger: Character images array must be the same length as speakers array!");
             return;
         }
         
         if (faceRightFlags != null && faceRightFlags.Length != speakers.Length)
         {
-            Debug.LogError("ProgrammaticDialogueTrigger: Face right flags array must be the same length as speakers array!");
+           //Debug.LogError("ProgrammaticDialogueTrigger: Face right flags array must be the same length as speakers array!");
             return;
         }
         
@@ -294,24 +294,24 @@ public class ProgrammaticDialogueTrigger : MonoBehaviour
                 resourcePath = resourcePath.Substring(0, lastDot);
             }
             
-            Debug.Log($"ProgrammaticDialogueTrigger: Attempting to load character sprite from Resources path: '{resourcePath}'");
+           //Debug.Log($"ProgrammaticDialogueTrigger: Attempting to load character sprite from Resources path: '{resourcePath}'");
             
             Sprite sprite = Resources.Load<Sprite>(resourcePath);
             
             if (sprite == null)
             {
-                Debug.LogWarning($"ProgrammaticDialogueTrigger: Could not load character sprite {resourcePath} from Resources. Make sure the image file is in a Resources folder.");
+               //Debug.LogWarning($"ProgrammaticDialogueTrigger: Could not load character sprite {resourcePath} from Resources. Make sure the image file is in a Resources folder.");
             }
             else
             {
-                Debug.Log($"ProgrammaticDialogueTrigger: Successfully loaded character sprite {sprite.name}");
+               //Debug.Log($"ProgrammaticDialogueTrigger: Successfully loaded character sprite {sprite.name}");
             }
             
             return sprite;
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"ProgrammaticDialogueTrigger: Error loading character sprite: {e.Message}");
+           //Debug.LogError($"ProgrammaticDialogueTrigger: Error loading character sprite: {e.Message}");
             return null;
         }
     }
@@ -324,13 +324,13 @@ public class ProgrammaticDialogueTrigger : MonoBehaviour
         
         if (dialogueManager == null)
         {
-            Debug.LogError("ProgrammaticDialogueTrigger: DialogueManager not found in the scene!");
+           //Debug.LogError("ProgrammaticDialogueTrigger: DialogueManager not found in the scene!");
             return;
         }
         
         if (dialogueManager.IsDialogueActive())
         {
-            Debug.LogWarning("ProgrammaticDialogueTrigger: Dialogue is already active!");
+           //Debug.LogWarning("ProgrammaticDialogueTrigger: Dialogue is already active!");
             return;
         }
         
