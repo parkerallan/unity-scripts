@@ -23,6 +23,9 @@ public class SceneEffects : MonoBehaviour
         
         // Automatically fade in when scene loads (in case we're coming from a black fade)
         StartCoroutine(FadeInOnStart());
+        
+        // Check if boss was defeated and enable victory dialogue if so
+        CheckForBossVictory();
     }
     
     private void FindPlayerAnimator()
@@ -303,22 +306,24 @@ public class SceneEffects : MonoBehaviour
     [Header("Teleport Settings")]
     public ParticleSystem teleportEffect;
     public AudioClip teleportSFX;
-    public float teleportDelay = 2f;
     
     [Header("Script Control Settings")]
     public MonoBehaviour scriptToEnable;
     
     [Header("Block Removal Settings")]
-    public GameObject blockToRemove;
+    public GameObject[] blocksToRemove = new GameObject[5]; // Array of objects to disable
     
-    public void Teleport(string sceneName, string spawnPointName)
+    [Header("Block Enable Settings")]
+    public GameObject[] blocksToEnable = new GameObject[5]; // Array of objects to enable
+    
+    public void Teleport()
     {
-        StartCoroutine(TeleportSequence(sceneName, spawnPointName));
+        StartCoroutine(TeleportSequence());
     }
     
-    private IEnumerator TeleportSequence(string sceneName, string spawnPointName)
+    private IEnumerator TeleportSequence()
     {
-        Debug.Log($"SceneEffects: Starting teleport to {sceneName} at {spawnPointName}");
+
         
         // Play teleport particle effect
         if (teleportEffect != null)
@@ -333,17 +338,92 @@ public class SceneEffects : MonoBehaviour
         }
         
         // Wait for specified delay
-        yield return new WaitForSeconds(teleportDelay);
+        yield return new WaitForSeconds(2f);
         
-        // Teleport to specified scene and spawn point
+        // Disable the GameObject this script is attached to
+        Debug.Log($"SceneEffects: Disabling GameObject {gameObject.name}");
+        gameObject.SetActive(false);
+    }
+    
+    public void TeleportToTown()
+    {
+        StartCoroutine(TeleportToTownSequence());
+    }
+    
+    private IEnumerator TeleportToTownSequence()
+    {
+        Debug.Log("SceneEffects: Starting teleport to Town scene");
+        
+        // Play teleport particle effect
+        if (teleportEffect != null)
+        {
+            teleportEffect.Play();
+        }
+        
+        // Play teleport sound effect
+        if (teleportSFX != null && SFXManager.instance != null)
+        {
+            SFXManager.instance.PlaySFXClip(teleportSFX, transform, 1f);
+        }
+        
+        // Wait for specified delay
+        yield return new WaitForSeconds(2f);
+        
+        // Teleport to Town scene at FrontOfBus spawn point
         if (buildingEntry != null)
         {
-            Debug.Log($"SceneEffects: Teleporting to scene {sceneName} at spawn point {spawnPointName}");
-            buildingEntry.EnterBuilding(sceneName, spawnPointName);
+            Debug.Log("SceneEffects: Teleporting to Town scene at FrontOfSchool spawn point");
+            
+            // Set a flag to indicate boss was defeated (this will persist across scene loads)
+            PlayerPrefs.SetInt("BossDefeated", 1);
+            PlayerPrefs.Save();
+            
+            buildingEntry.EnterBuilding("Town", "FrontOfSchool");
         }
         else
         {
-            Debug.LogError("SceneEffects: No building entry - cannot teleport");
+            Debug.LogError("SceneEffects: No building entry - cannot teleport to Town");
+        }
+    }
+    
+    public void TeleportToHome()
+    {
+        StartCoroutine(TeleportToHomeSequence());
+    }
+    
+    private IEnumerator TeleportToHomeSequence()
+    {
+        Debug.Log("SceneEffects: Starting teleport to Home scene");
+        
+        // Play teleport particle effect
+        if (teleportEffect != null)
+        {
+            teleportEffect.Play();
+        }
+        
+        // Play teleport sound effect
+        if (teleportSFX != null && SFXManager.instance != null)
+        {
+            SFXManager.instance.PlaySFXClip(teleportSFX, transform, 1f);
+        }
+        
+        // Wait for specified delay
+        yield return new WaitForSeconds(2f);
+        
+        // Teleport to Home scene at BedroomSpawnPoint
+        if (buildingEntry != null)
+        {
+            Debug.Log("SceneEffects: Teleporting to Home scene at BedroomSpawnPoint");
+            
+            // Set a flag to indicate we should start the laying sequence in Home scene
+            PlayerPrefs.SetInt("StartLayingSequence", 1);
+            PlayerPrefs.Save();
+            
+            buildingEntry.EnterBuilding("Home", "BedroomSpawnPoint");
+        }
+        else
+        {
+            Debug.LogError("SceneEffects: No building entry - cannot teleport to Home");
         }
     }
     
@@ -362,14 +442,299 @@ public class SceneEffects : MonoBehaviour
     
     public void RemoveBlock()
     {
-        if (blockToRemove != null)
+        Debug.Log($"SceneEffects: RemoveBlock called - processing {blocksToRemove.Length} objects");
+        
+        int removedCount = 0;
+        for (int i = 0; i < blocksToRemove.Length; i++)
         {
-            blockToRemove.SetActive(false);
-            Debug.Log($"SceneEffects: Disabled GameObject {blockToRemove.name}");
+            if (blocksToRemove[i] != null)
+            {
+                blocksToRemove[i].SetActive(false);
+                Debug.Log($"SceneEffects: Disabled GameObject {blocksToRemove[i].name}");
+                removedCount++;
+            }
+        }
+        
+        if (removedCount == 0)
+        {
+            Debug.LogWarning("SceneEffects: No GameObjects assigned to remove!");
         }
         else
         {
-            Debug.LogWarning("SceneEffects: No GameObject assigned to remove!");
+            Debug.Log($"SceneEffects: Successfully disabled {removedCount} GameObjects");
+        }
+    }
+    
+    public void EnableBlock()
+    {
+        Debug.Log($"SceneEffects: EnableBlock called - processing {blocksToEnable.Length} objects");
+        
+        int enabledCount = 0;
+        for (int i = 0; i < blocksToEnable.Length; i++)
+        {
+            if (blocksToEnable[i] != null)
+            {
+                blocksToEnable[i].SetActive(true);
+                Debug.Log($"SceneEffects: Enabled GameObject {blocksToEnable[i].name}");
+                enabledCount++;
+            }
+        }
+        
+        if (enabledCount == 0)
+        {
+            Debug.LogWarning("SceneEffects: No GameObjects assigned to enable!");
+        }
+        else
+        {
+            Debug.Log($"SceneEffects: Successfully enabled {enabledCount} GameObjects");
+        }
+    }
+    
+    // ===============================
+    // Boss Victory Dialogue System
+    // ===============================
+    
+    [Header("Boss Victory Dialogue")]
+    public GameObject victoryDialogueObject; // Assign the dialogue object that should appear after boss defeat
+    
+    /// <summary>
+    /// Call this method in the Town scene Start() to check if boss was defeated
+    /// and enable the victory dialogue if so
+    /// </summary>
+    public void CheckForBossVictory()
+    {
+        if (PlayerPrefs.GetInt("BossDefeated", 0) == 1)
+        {
+            Debug.Log("SceneEffects: Boss was defeated - enabling victory dialogue");
+            
+            if (victoryDialogueObject != null)
+            {
+                victoryDialogueObject.SetActive(true);
+                Debug.Log($"SceneEffects: Enabled victory dialogue object: {victoryDialogueObject.name}");
+                
+                // Clear the flag so it only happens once
+                PlayerPrefs.SetInt("BossDefeated", 0);
+                PlayerPrefs.Save();
+            }
+            else
+            {
+                Debug.LogWarning("SceneEffects: Victory dialogue object not assigned!");
+            }
+        }
+        else
+        {
+            Debug.Log("SceneEffects: No boss victory detected");
+        }
+        
+        // Check for laying sequence flag (for TeleportToHome)
+        CheckForLayingSequence();
+    }
+    
+    /// <summary>
+    /// Call this method in the Home scene Start() to check if we should start the laying sequence
+    /// </summary>
+    public void CheckForLayingSequence()
+    {
+        if (PlayerPrefs.GetInt("StartLayingSequence", 0) == 1)
+        {
+            Debug.Log("SceneEffects: Starting laying sequence in Home scene");
+            
+            // Clear the flag so it only happens once
+            PlayerPrefs.SetInt("StartLayingSequence", 0);
+            PlayerPrefs.Save();
+            
+            // Start the laying sequence
+            StartCoroutine(HandleLayingSequence());
+        }
+        else
+        {
+            Debug.Log("SceneEffects: No laying sequence requested");
+        }
+    }
+    
+    /// <summary>
+    /// Handle the animation and dialogue sequence similar to HandleNewGameSequence() but for Home scene
+    /// </summary>
+    private System.Collections.IEnumerator HandleLayingSequence()
+    {
+        Debug.Log("SceneEffects: Starting laying sequence");
+        
+        // Set animation IMMEDIATELY while scene is loading/fading
+        Animator playerAnimator = null;
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null)
+        {
+            // Try CharModel1 if Player tag not found
+            player = GameObject.Find("CharModel1");
+        }
+        
+        if (player != null)
+        {
+            playerAnimator = player.GetComponentInChildren<Animator>();
+            if (playerAnimator == null)
+            {
+                playerAnimator = player.GetComponent<Animator>();
+            }
+        }
+        
+        if (playerAnimator != null)
+        {
+            Debug.Log("SceneEffects: Setting Laying animation immediately");
+            playerAnimator.SetTrigger("Laying");
+            // Give the animation a moment to register
+            yield return new WaitForSeconds(0.1f);
+        }
+        else
+        {
+            Debug.LogWarning("SceneEffects: Could not find player animator for laying sequence");
+        }
+        
+        // Wait for scene to fully initialize and fade-in to complete
+        yield return new WaitForSeconds(0.5f);
+        
+        // Find or create dialogue trigger for the sequence
+        ProgrammaticDialogueTrigger dialogueTrigger = FindFirstObjectByType<ProgrammaticDialogueTrigger>();
+        if (dialogueTrigger == null)
+        {
+            // Create one if it doesn't exist
+            GameObject dialogueObj = new GameObject("LayingSequenceDialogueTrigger");
+            dialogueTrigger = dialogueObj.AddComponent<ProgrammaticDialogueTrigger>();
+            
+            // Set player reference
+            if (player != null)
+            {
+                dialogueTrigger.playerTransform = player.transform;
+            }
+        }
+        
+        // Start the dialogue after fade-in is complete
+        if (dialogueTrigger != null)
+        {
+            string[] speakers = { 
+                "Alice", 
+                "Mom", 
+                "Alice", 
+                "Alice" 
+            };
+            
+            string[] sentences = { 
+                "I'm so tired... what a long day.",
+                "Get up, you're going to be late!",
+                "Huh? Mom?",
+                "It worked... everything's gone back to normal!"
+            };
+            
+            Debug.Log("SceneEffects: Starting laying sequence dialogue");
+            
+            // Find DialogueManager to subscribe to its completion event
+            DialogueManager dialogueManager = FindFirstObjectByType<DialogueManager>();
+            if (dialogueManager != null)
+            {
+                // Subscribe to the dialogue end event
+                System.Action onDialogueComplete = null;
+                onDialogueComplete = () =>
+                {
+                    // Unsubscribe to prevent memory leaks
+                    dialogueManager.OnDialogueEnd -= onDialogueComplete;
+                    
+                    Debug.Log("SceneEffects: Dialogue completed, loading StartScreen");
+                    
+                    // Load StartScreen scene after dialogue completes
+                    if (buildingEntry != null)
+                    {
+                        buildingEntry.LoadScene("StartScreen", "StartPoint");
+                    }
+                    else
+                    {
+                        Debug.LogError("SceneEffects: No building entry - cannot load StartScreen scene");
+                    }
+                };
+                
+                dialogueManager.OnDialogueEnd += onDialogueComplete;
+            }
+            else
+            {
+                Debug.LogError("SceneEffects: Could not find DialogueManager to subscribe to completion event");
+            }
+            
+            // Start the dialogue
+            dialogueTrigger.StartMultiLineDialogue(speakers, sentences);
+        }
+        else
+        {
+            Debug.LogWarning("SceneEffects: Could not find or create dialogue trigger for laying sequence");
+        }
+    }
+    
+    // ===============================
+    // Weapon Manager Control Methods
+    // ===============================
+    
+    private WeaponManager FindPlayerWeaponManager()
+    {
+        // Try multiple ways to find the player with WeaponManager
+        GameObject player1 = GameObject.Find("CharModel1");
+        if (player1 != null)
+        {
+            WeaponManager wm = player1.GetComponent<WeaponManager>();
+            if (wm != null)
+            {
+                Debug.Log("SceneEffects: Found WeaponManager on Player1");
+                return wm;
+            }
+        }
+        
+        // Try finding by Player tag
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+        {
+            WeaponManager wm = player.GetComponent<WeaponManager>();
+            if (wm != null)
+            {
+                Debug.Log("SceneEffects: Found WeaponManager on Player");
+                return wm;
+            }
+        }
+        
+        // Try finding any WeaponManager in the scene
+        WeaponManager weaponManager = FindFirstObjectByType<WeaponManager>();
+        if (weaponManager != null)
+        {
+            Debug.Log("SceneEffects: Found WeaponManager in scene");
+            return weaponManager;
+        }
+        
+        Debug.LogError("SceneEffects: Could not find WeaponManager!");
+        return null;
+    }
+    
+    public void EnablePlayerWeapons()
+    {
+        WeaponManager weaponManager = FindPlayerWeaponManager();
+        if (weaponManager != null)
+        {
+            weaponManager.EnableWeapons();
+            Debug.Log("SceneEffects: Enabled player weapons");
+        }
+    }
+    
+    public void GivePlayerGun()
+    {
+        WeaponManager weaponManager = FindPlayerWeaponManager();
+        if (weaponManager != null)
+        {
+            weaponManager.SetObtainedGun(true);
+            Debug.Log("SceneEffects: Gave player the gun");
+        }
+    }
+    
+    public void GivePlayerRifle()
+    {
+        WeaponManager weaponManager = FindPlayerWeaponManager();
+        if (weaponManager != null)
+        {
+            weaponManager.SetObtainedRifle(true);
+            Debug.Log("SceneEffects: Gave player the rifle");
         }
     }
     
