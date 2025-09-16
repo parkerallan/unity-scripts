@@ -35,6 +35,67 @@ public class DialogueManager : MonoBehaviour
     {
         lines = new List<Dialogue.DialogueLine>();
         DialogCanvas.SetActive(false); // Ensure the canvas is hidden at the start
+        
+        // Auto-find player animator if not manually assigned
+        if (playerAnimator == null)
+        {
+            FindPlayerAnimator();
+        }
+    }
+    
+    private void FindPlayerAnimator()
+    {
+        // Try multiple ways to find the player animator
+        
+        // Try Alice (new player name)
+        GameObject alice = GameObject.Find("Alice");
+        if (alice != null)
+        {
+            playerAnimator = alice.GetComponent<Animator>();
+            if (playerAnimator != null)
+            {
+               //Debug.Log("DialogueManager: Found Alice with Animator");
+                return;
+            }
+        }
+        
+        // Try Player1
+        GameObject player1 = GameObject.Find("Player1");
+        if (player1 != null)
+        {
+            playerAnimator = player1.GetComponent<Animator>();
+            if (playerAnimator != null)
+            {
+               //Debug.Log("DialogueManager: Found Player1 with Animator");
+                return;
+            }
+        }
+        
+        // Try CharModel1
+        GameObject charModel = GameObject.Find("CharModel1");
+        if (charModel != null)
+        {
+            playerAnimator = charModel.GetComponent<Animator>();
+            if (playerAnimator != null)
+            {
+               //Debug.Log("DialogueManager: Found CharModel1 with Animator");
+                return;
+            }
+        }
+        
+        // Try finding by Player tag
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+        {
+            playerAnimator = player.GetComponentInChildren<Animator>();
+            if (playerAnimator != null)
+            {
+               //Debug.Log("DialogueManager: Found Player by tag with Animator");
+                return;
+            }
+        }
+        
+       //Debug.LogError("DialogueManager: Could not find player animator!");
     }
 
     void Update()
@@ -137,7 +198,7 @@ public class DialogueManager : MonoBehaviour
         if (!string.IsNullOrEmpty(line.animationTrigger))
         {
             Animator targetAnimator = null;
-            if (line.speaker == "Player" && playerAnimator != null)
+            if (line.speaker == "Alice" && playerAnimator != null)
                 targetAnimator = playerAnimator;
             else if (currentNpcAnimator != null)
                 targetAnimator = currentNpcAnimator;
@@ -192,7 +253,7 @@ public class DialogueManager : MonoBehaviour
 
     private void SetArrowVisibility(bool isVisible)
     {
-        Debug.Log($"SetArrowVisibility called. isVisible: {isVisible}");
+       //Debug.Log($"SetArrowVisibility called. isVisible: {isVisible}");
 
         if (arrowFlashCoroutine != null)
         {
@@ -258,7 +319,7 @@ public class DialogueManager : MonoBehaviour
 
     private void DisplayChoices(List<Dialogue.DialogueChoice> choices)
     {
-        Debug.Log($"Displaying {choices.Count} choices.");
+       //Debug.Log($"Displaying {choices.Count} choices.");
 
         // Set the flag to indicate that choices are being displayed
         isDisplayingChoices = true;
@@ -287,7 +348,7 @@ public class DialogueManager : MonoBehaviour
             }
             else
             {
-                Debug.LogError("Choice button prefab is missing a TextMeshProUGUI component!");
+               //Debug.LogError("Choice button prefab is missing a TextMeshProUGUI component!");
             }
 
             Button button = choiceButton.GetComponent<Button>();
@@ -300,7 +361,7 @@ public class DialogueManager : MonoBehaviour
             }
             else
             {
-                Debug.LogError("Choice button prefab is missing a Button component!");
+               //Debug.LogError("Choice button prefab is missing a Button component!");
             }
 
             choiceButtons.Add(button);
@@ -417,7 +478,7 @@ public class DialogueManager : MonoBehaviour
 
             // Set the marker's position relative to the button
             choiceMarker.anchoredPosition = new Vector2(defaultX - markerOffset, middleY);
-            Debug.Log($"Marker aligned to middle left edge of button: {choiceMarker.anchoredPosition}");
+           //Debug.Log($"Marker aligned to middle left edge of button: {choiceMarker.anchoredPosition}");
         }
 
         button.Select();

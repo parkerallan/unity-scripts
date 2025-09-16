@@ -12,14 +12,14 @@ public class AutoDialogueTrigger : MonoBehaviour
         if (other.CompareTag("Player") && !hasDialogueStarted)
         {
             hasDialogueStarted = true;
-            Debug.Log("Player entered the dialogue zone. Starting dialogue...");
+           //Debug.Log("Player entered the dialogue zone. Starting dialogue...");
 
             // Find the DialogueManager in the scene
             DialogueManager dialogueManager = Object.FindAnyObjectByType<DialogueManager>();
 
             if (dialogueManager == null)
             {
-                Debug.LogError("DialogueManager not found in the scene!");
+               //Debug.LogError("DialogueManager not found in the scene!");
                 return; // Exit to prevent further errors
             }
 
@@ -57,7 +57,7 @@ public class AutoDialogueTrigger : MonoBehaviour
         if (playerController != null)
         {
             playerController.enabled = false;
-            Debug.Log("Player controller disabled for dialogue");
+           //Debug.Log("Player controller disabled for dialogue");
         }
         
         // Stop player rigidbody movement
@@ -75,7 +75,7 @@ public class AutoDialogueTrigger : MonoBehaviour
 
     private void HandleDialogueEnd()
     {
-        Debug.Log("Dialogue ended. Re-enabling player animations and movement, then destroying trigger.");
+       //Debug.Log("Dialogue ended. Re-enabling player animations and movement, then destroying trigger.");
 
         // Re-enable player animations
         if (playerAnimator != null)
@@ -87,7 +87,7 @@ public class AutoDialogueTrigger : MonoBehaviour
         if (playerController != null)
         {
             playerController.enabled = true;
-            Debug.Log("Player controller re-enabled after dialogue");
+           //Debug.Log("Player controller re-enabled after dialogue");
         }
 
         // Unsubscribe from the OnDialogueEnd event

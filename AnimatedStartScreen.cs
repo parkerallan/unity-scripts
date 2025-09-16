@@ -13,7 +13,7 @@ public class AnimatedStartScreen : MonoBehaviour
     
     [Header("Menu Buttons")]
     public Button newGameButton;
-    public Button loadGameButton;
+    //public Button loadGameButton;
     public Button settingsButton;
     public Button creditsButton;
     public float buttonAnimationDuration = 0.15f;
@@ -40,21 +40,21 @@ public class AnimatedStartScreen : MonoBehaviour
     
     private void Start()
     {
-        Debug.Log("AnimatedStartScreen: Start() called");
-        Debug.Log($"TitleImage assigned: {titleImage != null}");
-        Debug.Log($"PlayOnStart: {playOnStart}");
+       //Debug.Log("AnimatedStartScreen: Start() called");
+       //Debug.Log($"TitleImage assigned: {titleImage != null}");
+       //Debug.Log($"PlayOnStart: {playOnStart}");
         
         InitializeComponents();
         StoreOriginalPositions();
         
         if (playOnStart)
         {
-            Debug.Log("AnimatedStartScreen: Auto-starting animation");
+           //Debug.Log("AnimatedStartScreen: Auto-starting animation");
             StartCoroutine(PlayStartAnimation());
         }
         else
         {
-            Debug.Log("AnimatedStartScreen: Auto-start disabled");
+           //Debug.Log("AnimatedStartScreen: Auto-start disabled");
         }
     }
     
@@ -63,7 +63,7 @@ public class AnimatedStartScreen : MonoBehaviour
         // Press SPACE to manually start animation for testing
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            Debug.Log("AnimatedStartScreen: Manual start triggered with SPACE key");
+           //Debug.Log("AnimatedStartScreen: Manual start triggered with SPACE key");
             StartAnimation();
         }
     }
@@ -98,24 +98,24 @@ public class AnimatedStartScreen : MonoBehaviour
             if (mainCamera != null)
             {
                 mainCamera.gameObject.AddComponent<AudioListener>();
-                Debug.Log("AnimatedStartScreen: Added Audio Listener to main camera");
+               //Debug.Log("AnimatedStartScreen: Added Audio Listener to main camera");
             }
             else
             {
                 // If no camera found, add it to this GameObject as a fallback
                 gameObject.AddComponent<AudioListener>();
-                Debug.Log("AnimatedStartScreen: Added Audio Listener to this GameObject (no camera found)");
+               //Debug.Log("AnimatedStartScreen: Added Audio Listener to this GameObject (no camera found)");
             }
         }
         else
         {
-            Debug.Log("AnimatedStartScreen: Audio Listener already exists in scene");
+           //Debug.Log("AnimatedStartScreen: Audio Listener already exists in scene");
         }
     }
     
     private void SetupButtonSounds()
     {
-        Button[] buttons = { newGameButton, loadGameButton, settingsButton, creditsButton };
+        Button[] buttons = { newGameButton, settingsButton, creditsButton };
         
         foreach (Button button in buttons)
         {
@@ -142,7 +142,7 @@ public class AnimatedStartScreen : MonoBehaviour
     private void StoreOriginalPositions()
     {
         // Store button positions
-        Button[] buttons = { newGameButton, loadGameButton, settingsButton, creditsButton };
+        Button[] buttons = { newGameButton, settingsButton, creditsButton };
         originalButtonPositions = new Vector3[buttons.Length];
         
         for (int i = 0; i < buttons.Length; i++)
@@ -161,12 +161,12 @@ public class AnimatedStartScreen : MonoBehaviour
             originalTitlePosition = rectTransform.anchoredPosition;
         }
             
-        Debug.Log("AnimatedStartScreen: Stored original positions");
+       //Debug.Log("AnimatedStartScreen: Stored original positions");
     }
     
     private void SetInitialVisibility()
     {
-        Debug.Log("AnimatedStartScreen: Setting initial visibility");
+       //Debug.Log("AnimatedStartScreen: Setting initial visibility");
         
         // Hide title - don't change scale, just make transparent
         if (titleImage != null)
@@ -179,17 +179,17 @@ public class AnimatedStartScreen : MonoBehaviour
                 if (childImage != titleImage) // Don't hide the parent again
                     childImage.color = Color.clear;
             }
-            Debug.Log("AnimatedStartScreen: Set title transparent (no scale change)");
+           //Debug.Log("AnimatedStartScreen: Set title transparent (no scale change)");
         }
         
         // Hide buttons
-        Button[] buttons = { newGameButton, loadGameButton, settingsButton, creditsButton };
+        Button[] buttons = { newGameButton, settingsButton, creditsButton };
         for (int i = 0; i < buttons.Length; i++)
         {
             if (buttons[i] != null)
             {
                 buttons[i].gameObject.SetActive(false);
-                Debug.Log($"AnimatedStartScreen: Hid button {i}");
+               //Debug.Log($"AnimatedStartScreen: Hid button {i}");
             }
         }
         
@@ -206,44 +206,44 @@ public class AnimatedStartScreen : MonoBehaviour
                     childImage.color = new Color(childImage.color.r, childImage.color.g, childImage.color.b, 0);
             }
             
-            Debug.Log("AnimatedStartScreen: Set background and child images initial state");
+           //Debug.Log("AnimatedStartScreen: Set background and child images initial state");
         }
         
-        Debug.Log("AnimatedStartScreen: Initial visibility setup complete");
+       //Debug.Log("AnimatedStartScreen: Initial visibility setup complete");
     }
     
     public IEnumerator PlayStartAnimation()
     {
-        Debug.Log("AnimatedStartScreen: Starting animation sequence");
+       //Debug.Log("AnimatedStartScreen: Starting animation sequence");
         
         // Start background music - just tell the AudioSource to play
         if (musicAudioSource != null)
         {
             musicAudioSource.Play();
-            Debug.Log("AnimatedStartScreen: Started music via external AudioSource");
+           //Debug.Log("AnimatedStartScreen: Started music via external AudioSource");
         }
         else
         {
-            Debug.LogWarning("AnimatedStartScreen: No music AudioSource assigned");
+           //Debug.LogWarning("AnimatedStartScreen: No music AudioSource assigned");
         }
         
         // Fade in background
         if (backgroundImage != null)
         {
-            Debug.Log("AnimatedStartScreen: Fading in background");
+           //Debug.Log("AnimatedStartScreen: Fading in background");
             StartCoroutine(FadeInBackground()); // Start background fade without waiting
         }
         
         // Start title animation immediately (don't wait for background)
-        Debug.Log("AnimatedStartScreen: Starting title animation");
+       //Debug.Log("AnimatedStartScreen: Starting title animation");
         yield return StartCoroutine(AnimateTitle());
         
         // Animate buttons immediately after title
-        Debug.Log("AnimatedStartScreen: Starting button animations");
+       //Debug.Log("AnimatedStartScreen: Starting button animations");
         yield return StartCoroutine(AnimateButtons());
         
         animationComplete = true;
-        Debug.Log("AnimatedStartScreen: Animation sequence complete");
+       //Debug.Log("AnimatedStartScreen: Animation sequence complete");
         
         // Remove looping postcard animation - postcards stay visible after title
     }
@@ -335,7 +335,7 @@ public class AnimatedStartScreen : MonoBehaviour
     
     private IEnumerator AnimateButtons()
     {
-        Button[] buttons = { newGameButton, loadGameButton, settingsButton, creditsButton };
+        Button[] buttons = { newGameButton, settingsButton, creditsButton };
         
         // Start all button animations simultaneously with stagger
         for (int i = 0; i < buttons.Length; i++)
@@ -422,25 +422,25 @@ public class AnimatedStartScreen : MonoBehaviour
     // Public methods for button functionality
     public void StartNewGame()
     {
-        Debug.Log("Starting new game...");
+       //Debug.Log("Starting new game...");
         // Add your new game logic here
     }
     
     public void LoadGame()
     {
-        Debug.Log("Loading game...");
+       //Debug.Log("Loading game...");
         // Add your load game logic here
     }
     
     public void OpenSettings()
     {
-        Debug.Log("Opening settings...");
+       //Debug.Log("Opening settings...");
         // Add your settings logic here
     }
     
     public void ShowCredits()
     {
-        Debug.Log("Showing credits...");
+       //Debug.Log("Showing credits...");
         // Add your credits logic here
     }
     
