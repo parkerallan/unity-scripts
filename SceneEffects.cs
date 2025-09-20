@@ -417,6 +417,10 @@ public class SceneEffects : MonoBehaviour
             
             // Set a flag to indicate we should start the laying sequence in Home scene
             PlayerPrefs.SetInt("StartLayingSequence", 1);
+            
+            // Also set a flag to ensure proper positioning at spawn point
+            PlayerPrefs.SetInt("PositionAtSpawn", 1);
+            PlayerPrefs.SetString("TargetSpawnPoint", "BedroomSpawnPoint");
             PlayerPrefs.Save();
             
             buildingEntry.EnterBuilding("Home", "BedroomSpawnPoint");
@@ -528,6 +532,9 @@ public class SceneEffects : MonoBehaviour
         
         // Check for laying sequence flag (for TeleportToHome)
         CheckForLayingSequence();
+        
+        // Check for positioning flag (for precise spawn point positioning)
+        CheckForSpawnPointPositioning();
     }
     
     /// <summary>
@@ -553,21 +560,141 @@ public class SceneEffects : MonoBehaviour
     }
     
     /// <summary>
+    /// Check if we need to position the player precisely at a spawn point
+    /// </summary>
+    public void CheckForSpawnPointPositioning()
+    {
+        if (PlayerPrefs.GetInt("PositionAtSpawn", 0) == 1)
+        {
+            string targetSpawnPoint = PlayerPrefs.GetString("TargetSpawnPoint", "");
+            Debug.Log($"SceneEffects: Positioning player at spawn point: {targetSpawnPoint}");
+            
+            // Clear the flags so it only happens once
+            PlayerPrefs.SetInt("PositionAtSpawn", 0);
+            PlayerPrefs.DeleteKey("TargetSpawnPoint");
+            PlayerPrefs.Save();
+            
+            // Position the player at the spawn point
+            StartCoroutine(PositionPlayerAtSpawnPoint(targetSpawnPoint));
+        }
+        else
+        {
+            Debug.Log("SceneEffects: No spawn point positioning requested");
+        }
+    }
+    
+    /// <summary>
+    /// Position the player exactly at the specified spawn point
+    /// </summary>
+    private System.Collections.IEnumerator PositionPlayerAtSpawnPoint(string spawnPointName)
+    {
+        // Wait a moment for scene to fully initialize
+        yield return new WaitForSeconds(0.1f);
+        
+        // Find the spawn point GameObject
+        GameObject spawnPoint = GameObject.Find(spawnPointName);
+        if (spawnPoint == null)
+        {
+            Debug.LogError($"SceneEffects: Could not find spawn point: {spawnPointName}");
+            yield break;
+        }
+        
+        // Find the player GameObject
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null)
+        {
+            player = GameObject.Find("CharModel1");
+        }
+        
+        if (player == null)
+        {
+            Debug.LogError("SceneEffects: Could not find player to position");
+            yield break;
+        }
+        
+        // Position and rotate the player to match the spawn point exactly
+        Transform playerTransform = player.transform;
+        Transform spawnTransform = spawnPoint.transform;
+        
+        playerTransform.position = spawnTransform.position;
+        playerTransform.rotation = spawnTransform.rotation;
+        
+        Debug.Log($"SceneEffects: Player positioned at {spawnTransform.position} with rotation {spawnTransform.rotation.eulerAngles}");
+        
+        // If player has a CharacterController, disable and re-enable it to ensure position sticks
+        CharacterController controller = player.GetComponent<CharacterController>();
+        if (controller != null)
+        {
+            controller.enabled = false;
+            yield return null;
+            controller.enabled = true;
+            Debug.Log("SceneEffects: CharacterController refreshed for positioning");
+        }
+        
+        // If player has a Rigidbody, stop any momentum
+        Rigidbody rb = player.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            Debug.Log("SceneEffects: Player movement reset");
+        }
+    }
+    
+    /// <summary>
     /// Handle the animation and dialogue sequence similar to HandleNewGameSequence() but for Home scene
     /// </summary>
     private System.Collections.IEnumerator HandleLayingSequence()
     {
         Debug.Log("SceneEffects: Starting laying sequence");
         
-        // Set animation IMMEDIATELY while scene is loading/fading
-        Animator playerAnimator = null;
+        // Wait longer for scene to fully initialize
+        yield return new WaitForSeconds(0.2f);
+        
+        // Find the player and ensure proper positioning first
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player == null)
         {
-            // Try CharModel1 if Player tag not found
             player = GameObject.Find("CharModel1");
         }
         
+        if (player != null)
+        {
+            // Ensure player is at the correct spawn point with correct rotation
+            GameObject spawnPoint = GameObject.Find("BedroomSpawnPoint");
+            if (spawnPoint != null)
+            {
+                // Disable CharacterController if present to ensure positioning works
+                CharacterController controller = player.GetComponent<CharacterController>();
+                if (controller != null)
+                {
+                    controller.enabled = false;
+                }
+                
+                // Set position and rotation to match spawn point exactly
+                player.transform.position = spawnPoint.transform.position;
+                player.transform.rotation = spawnPoint.transform.rotation;
+                
+                // Re-enable CharacterController
+                if (controller != null)
+                {
+                    yield return new WaitForEndOfFrame();
+                    controller.enabled = true;
+                }
+                
+                Debug.Log($"SceneEffects: Player positioned at spawn point with rotation {spawnPoint.transform.rotation.eulerAngles}");
+            }
+            else
+            {
+                Debug.LogWarning("SceneEffects: BedroomSpawnPoint not found for positioning");
+            }
+        }
+        
+        // Wait another frame for positioning to settle
+        yield return new WaitForEndOfFrame();
+        
+        // Now find and set the animation
+        Animator playerAnimator = null;
         if (player != null)
         {
             playerAnimator = player.GetComponentInChildren<Animator>();
@@ -579,10 +706,10 @@ public class SceneEffects : MonoBehaviour
         
         if (playerAnimator != null)
         {
-            Debug.Log("SceneEffects: Setting Laying animation immediately");
+            Debug.Log("SceneEffects: Setting Laying animation");
             playerAnimator.SetTrigger("Laying");
-            // Give the animation a moment to register
-            yield return new WaitForSeconds(0.1f);
+            // Wait for animation to register
+            yield return new WaitForSeconds(0.3f);
         }
         else
         {

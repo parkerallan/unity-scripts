@@ -103,17 +103,6 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         _targetSpawnPointName = spawnPointName;
         _useSpecificPosition = false;
         
-        // Show the overlay immediately
-        try
-        {
-            SceneTransitionOverlay.Instance?.ShowOverlay();
-        }
-        catch (System.Exception e)
-        {
-            if (enableDebugLogs)
-                Debug.LogWarning($"ProgrammaticBuildingEntry: Could not show overlay: {e.Message}");
-        }
-        
         // Subscribe to the sceneLoaded event and load the scene
         SceneManager.sceneLoaded += OnSceneLoadedForNewPlayer;
         SceneManager.LoadScene(sceneToLoad);
@@ -300,6 +289,18 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log($"ProgrammaticBuildingEntry: Scene {scene.name} loaded for new player");
         
+        // Use a coroutine to handle player positioning after scene is fully initialized
+        StartCoroutine(HandleNewPlayerPositioning(scene));
+    }
+    
+    /// <summary>
+    /// Coroutine to handle new player positioning with proper timing
+    /// </summary>
+    private System.Collections.IEnumerator HandleNewPlayerPositioning(Scene scene)
+    {
+        // Wait a frame to ensure scene is fully loaded
+        yield return new WaitForEndOfFrame();
+        
         // Find the player in the new scene
         GameObject scenePlayer = GameObject.FindWithTag("Player");
         if (scenePlayer != null)
@@ -335,17 +336,6 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         else if (enableDebugLogs)
         {
             Debug.LogWarning("ProgrammaticBuildingEntry: GameManager not found to notify of scene entry");
-        }
-        
-        // Hide the overlay
-        try
-        {
-            SceneTransitionOverlay.Instance?.HideOverlay();
-        }
-        catch (System.Exception e)
-        {
-            if (enableDebugLogs)
-                Debug.LogWarning($"ProgrammaticBuildingEntry: Could not hide overlay: {e.Message}");
         }
         
         // Reset spawn point name for next use
@@ -419,11 +409,9 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         {
             // Disable CharacterController before positioning to avoid conflicts
             characterController.enabled = false;
-            player.transform.SetPositionAndRotation(position, rotation);
-            characterController.enabled = true;
             
-            if (enableDebugLogs)
-                Debug.Log($"ProgrammaticBuildingEntry: Player positioned with CharacterController handling");
+            // Wait a frame to ensure CharacterController is properly disabled
+            StartCoroutine(PositionPlayerWithDelay(player, position, rotation, characterController));
         }
         else
         {
@@ -435,7 +423,28 @@ public class ProgrammaticBuildingEntry : MonoBehaviour
         }
         
         if (enableDebugLogs)
-            Debug.Log($"ProgrammaticBuildingEntry: Player positioned at {position} with rotation {rotation}");
+            Debug.Log($"ProgrammaticBuildingEntry: Player positioning initiated at {position} with rotation {rotation}");
+    }
+    
+    /// <summary>
+    /// Coroutine to properly position player with CharacterController after a frame delay
+    /// </summary>
+    private System.Collections.IEnumerator PositionPlayerWithDelay(GameObject player, Vector3 position, Quaternion rotation, CharacterController characterController)
+    {
+        // Wait for end of frame to ensure CharacterController is fully disabled
+        yield return new WaitForEndOfFrame();
+        
+        // Position the player
+        player.transform.SetPositionAndRotation(position, rotation);
+        
+        // Wait another frame before re-enabling CharacterController
+        yield return new WaitForEndOfFrame();
+        
+        // Re-enable CharacterController
+        characterController.enabled = true;
+        
+        if (enableDebugLogs)
+            Debug.Log($"ProgrammaticBuildingEntry: Player positioned with CharacterController handling at {position}");
     }
 
     // ===============================

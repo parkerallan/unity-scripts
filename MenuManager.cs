@@ -28,6 +28,14 @@ public class MenuManager : MonoBehaviour
     
     // Static flag to track new game start
     public static bool isNewGameStarting = false;
+    
+    // Track which controls were enabled before pausing
+    private bool wasPlayerControllerEnabled = false;
+    private bool wasUnderwaterControllerEnabled = false;
+    private bool wasGunScriptEnabled = false;
+    private bool wasRifleScriptEnabled = false;
+    private bool wasWeaponManagerEnabled = false;
+    private Dictionary<BuildingEnterTrigger, bool> buildingTriggerStates = new Dictionary<BuildingEnterTrigger, bool>();
 
     //private bool isGameStarted = false;
 
@@ -220,10 +228,10 @@ public class MenuManager : MonoBehaviour
         SetCursorState(false, CursorLockMode.Locked); // Hide and lock cursor
         if (PauseMenu != null) PauseMenu.SetActive(false); // Hide the pause menu
         
-        // Re-enable player controls
+        // Restore only controls that were enabled before pausing
         EnablePlayerControls();
         
-        Debug.Log("MenuManager: Game resumed");
+        Debug.Log("MenuManager: Game resumed with smart control restoration");
     }
 
     // Centralized cursor state management
@@ -237,109 +245,143 @@ public class MenuManager : MonoBehaviour
     // Disable all player controls when paused
     private void DisablePlayerControls()
     {
-        // Disable PlayerController
+        // Track current states before disabling
         PlayerController playerController = FindAnyObjectByType<PlayerController>();
         if (playerController != null)
         {
+            wasPlayerControllerEnabled = playerController.enabled;
             playerController.enabled = false;
-            Debug.Log("MenuManager: PlayerController disabled");
+            Debug.Log($"MenuManager: PlayerController disabled (was {wasPlayerControllerEnabled})");
         }
 
-        // Disable UnderwaterPlayerController
         UnderwaterPlayerController underwaterController = FindAnyObjectByType<UnderwaterPlayerController>();
         if (underwaterController != null)
         {
+            wasUnderwaterControllerEnabled = underwaterController.enabled;
             underwaterController.enabled = false;
-            Debug.Log("MenuManager: UnderwaterPlayerController disabled");
+            Debug.Log($"MenuManager: UnderwaterPlayerController disabled (was {wasUnderwaterControllerEnabled})");
         }
 
-        // Disable weapon scripts
         GunScript gunScript = FindAnyObjectByType<GunScript>();
         if (gunScript != null)
         {
+            wasGunScriptEnabled = gunScript.enabled;
             gunScript.enabled = false;
-            Debug.Log("MenuManager: GunScript disabled");
+            Debug.Log($"MenuManager: GunScript disabled (was {wasGunScriptEnabled})");
         }
 
         RifleScript rifleScript = FindAnyObjectByType<RifleScript>();
         if (rifleScript != null)
         {
+            wasRifleScriptEnabled = rifleScript.enabled;
             rifleScript.enabled = false;
-            Debug.Log("MenuManager: RifleScript disabled");
+            Debug.Log($"MenuManager: RifleScript disabled (was {wasRifleScriptEnabled})");
         }
 
-        // Disable WeaponManager
         WeaponManager weaponManager = FindAnyObjectByType<WeaponManager>();
         if (weaponManager != null)
         {
+            wasWeaponManagerEnabled = weaponManager.enabled;
             weaponManager.enabled = false;
-            Debug.Log("MenuManager: WeaponManager disabled");
+            Debug.Log($"MenuManager: WeaponManager disabled (was {wasWeaponManagerEnabled})");
         }
 
-        // Disable all building enter triggers
+        // Track building trigger states
+        buildingTriggerStates.Clear();
         BuildingEnterTrigger[] buildingTriggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
         foreach (BuildingEnterTrigger trigger in buildingTriggers)
         {
+            buildingTriggerStates[trigger] = trigger.enabled;
             trigger.enabled = false;
         }
         if (buildingTriggers.Length > 0)
         {
-            Debug.Log($"MenuManager: {buildingTriggers.Length} BuildingEnterTriggers disabled");
+            Debug.Log($"MenuManager: {buildingTriggers.Length} BuildingEnterTriggers disabled (states tracked)");
         }
     }
 
-    // Re-enable all player controls when resumed
+    // Re-enable player controls that were originally enabled before pausing
     private void EnablePlayerControls()
     {
-        // Enable PlayerController
+        // Only restore PlayerController if it was enabled before pausing
         PlayerController playerController = FindAnyObjectByType<PlayerController>();
-        if (playerController != null)
+        if (playerController != null && wasPlayerControllerEnabled)
         {
             playerController.enabled = true;
-            Debug.Log("MenuManager: PlayerController enabled");
+            Debug.Log("MenuManager: PlayerController restored to enabled state");
+        }
+        else if (playerController != null)
+        {
+            Debug.Log("MenuManager: PlayerController left disabled (was disabled before pause)");
         }
 
-        // Enable UnderwaterPlayerController
+        // Only restore UnderwaterPlayerController if it was enabled before pausing
         UnderwaterPlayerController underwaterController = FindAnyObjectByType<UnderwaterPlayerController>();
-        if (underwaterController != null)
+        if (underwaterController != null && wasUnderwaterControllerEnabled)
         {
             underwaterController.enabled = true;
-            Debug.Log("MenuManager: UnderwaterPlayerController enabled");
+            Debug.Log("MenuManager: UnderwaterPlayerController restored to enabled state");
+        }
+        else if (underwaterController != null)
+        {
+            Debug.Log("MenuManager: UnderwaterPlayerController left disabled (was disabled before pause)");
         }
 
-        // Enable weapon scripts
+        // Only restore GunScript if it was enabled before pausing
         GunScript gunScript = FindAnyObjectByType<GunScript>();
-        if (gunScript != null)
+        if (gunScript != null && wasGunScriptEnabled)
         {
             gunScript.enabled = true;
-            Debug.Log("MenuManager: GunScript enabled");
+            Debug.Log("MenuManager: GunScript restored to enabled state");
+        }
+        else if (gunScript != null)
+        {
+            Debug.Log("MenuManager: GunScript left disabled (was disabled before pause)");
         }
 
+        // Only restore RifleScript if it was enabled before pausing
         RifleScript rifleScript = FindAnyObjectByType<RifleScript>();
-        if (rifleScript != null)
+        if (rifleScript != null && wasRifleScriptEnabled)
         {
             rifleScript.enabled = true;
-            Debug.Log("MenuManager: RifleScript enabled");
+            Debug.Log("MenuManager: RifleScript restored to enabled state");
+        }
+        else if (rifleScript != null)
+        {
+            Debug.Log("MenuManager: RifleScript left disabled (was disabled before pause)");
         }
 
-        // Enable WeaponManager
+        // Only restore WeaponManager if it was enabled before pausing
         WeaponManager weaponManager = FindAnyObjectByType<WeaponManager>();
-        if (weaponManager != null)
+        if (weaponManager != null && wasWeaponManagerEnabled)
         {
             weaponManager.enabled = true;
-            Debug.Log("MenuManager: WeaponManager enabled");
+            Debug.Log("MenuManager: WeaponManager restored to enabled state");
+        }
+        else if (weaponManager != null)
+        {
+            Debug.Log("MenuManager: WeaponManager left disabled (was disabled before pause)");
         }
 
-        // Enable all building enter triggers
+        // Restore building trigger states
         BuildingEnterTrigger[] buildingTriggers = FindObjectsByType<BuildingEnterTrigger>(FindObjectsSortMode.None);
         foreach (BuildingEnterTrigger trigger in buildingTriggers)
         {
-            trigger.enabled = true;
+            if (buildingTriggerStates.ContainsKey(trigger))
+            {
+                trigger.enabled = buildingTriggerStates[trigger];
+                Debug.Log($"MenuManager: {trigger.name} restored to {buildingTriggerStates[trigger]} state");
+            }
+            else
+            {
+                // If we don't have state info, default to enabled (safer for triggers)
+                trigger.enabled = true;
+                Debug.Log($"MenuManager: {trigger.name} defaulted to enabled (no stored state)");
+            }
         }
-        if (buildingTriggers.Length > 0)
-        {
-            Debug.Log($"MenuManager: {buildingTriggers.Length} BuildingEnterTriggers enabled");
-        }
+        
+        // Clear the state tracking after restoring
+        buildingTriggerStates.Clear();
     }
     public void ClosePauseMenu()
     {
@@ -353,7 +395,11 @@ public class MenuManager : MonoBehaviour
         if (PauseMenu.activeSelf && !isSubMenuOpen)
         {
             // If the pause menu is open and no sub-menu is open, close the pause menu
-            ResumeGame();
+            Time.timeScale = 1f; // Resume the game
+            SetCursorState(false, CursorLockMode.Locked); // Hide and lock cursor
+            PauseMenu.SetActive(false); // Hide the pause menu
+            EnablePlayerControls(); // Restore only controls that were enabled before pausing
+            Debug.Log("MenuManager: Pause menu closed with smart control restoration");
         }
         else if (!PauseMenu.activeSelf && isSubMenuOpen)
         {
@@ -361,7 +407,10 @@ public class MenuManager : MonoBehaviour
             if (SoundMenu != null) SoundMenu.SetActive(false); // Hide the sound menu
             if (VideoMenu != null) VideoMenu.SetActive(false); // Hide the video menu
             isSubMenuOpen = false; // Mark that no sub-menu is open
-            ResumeGame();
+            Time.timeScale = 1f; // Resume the game
+            SetCursorState(false, CursorLockMode.Locked); // Hide and lock cursor
+            EnablePlayerControls(); // Restore only controls that were enabled before pausing
+            Debug.Log("MenuManager: Submenus closed with smart control restoration");
         }
     }
 
